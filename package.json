@@ -1,0 +1,44 @@
+{
+  "name": "glm-quota-line",
+  "version": "0.1.0",
+  "description": "Claude Code status line helper for GLM Coding Plan quota.",
+  "type": "module",
+  "license": "MIT",
+  "author": "caojian",
+  "preferGlobal": true,
+  "keywords": [
+    "claude-code",
+    "statusline",
+    "glm",
+    "quota",
+    "cli"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deluo/glm-quota-line.git"
+  },
+  "homepage": "https://github.com/deluo/glm-quota-line#readme",
+  "bugs": {
+    "url": "https://github.com/deluo/glm-quota-line/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "src",
+    "scripts",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "bin": {
+    "glm-quota-line": "./src/cli.js"
+  },
+  "scripts": {
+    "start": "node ./src/cli.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
