@@ -13,7 +13,6 @@ export async function runQuotaLine(config, options = {}) {
   const freshCache = await readFreshCache(
     config.cacheFilePath,
     config.cacheTtlMs,
-    config.threadId,
     now
   );
   if (freshCache) {
@@ -25,7 +24,7 @@ export async function runQuotaLine(config, options = {}) {
   const parsed = parseQuotaResponse(response);
 
   if (parsed.kind === "success") {
-    await writeSuccessCache(config.cacheFilePath, parsed, config.threadId, now);
+    await writeSuccessCache(config.cacheFilePath, parsed, now);
     return parsed;
   }
 

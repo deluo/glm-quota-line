@@ -26,14 +26,3 @@ export async function readStatusLineInput(stdin = process.stdin) {
   }
 }
 
-export function getSessionId(statusLineInput, env = process.env) {
-  if (statusLineInput && typeof statusLineInput.session_id === "string" && statusLineInput.session_id) {
-    return statusLineInput.session_id;
-  }
-
-  if (typeof env.CODEX_THREAD_ID === "string" && env.CODEX_THREAD_ID) {
-    return env.CODEX_THREAD_ID;
-  }
-
-  return "";
-}

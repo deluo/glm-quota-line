@@ -21,10 +21,6 @@ function isSuccessCacheShape(value) {
   return false;
 }
 
-function isValidThreadId(value) {
-  return value === undefined || typeof value === "string";
-}
-
 export async function readCache(cacheFilePath) {
   try {
     const raw = await fs.readFile(cacheFilePath, "utf8");
@@ -36,7 +32,6 @@ export async function readCache(cacheFilePath) {
 
     if (
       !Number.isFinite(parsed.savedAt) ||
-      !isValidThreadId(parsed.threadId) ||
       !isSuccessCacheShape(parsed.result)
     ) {
       return null;
@@ -52,24 +47,19 @@ export async function readCache(cacheFilePath) {
   }
 }
 
-export async function readFreshCache(cacheFilePath, ttlMs, threadId = "", now = Date.now()) {
+export async function readFreshCache(cacheFilePath, ttlMs, now = Date.now()) {
   const cached = await readCache(cacheFilePath);
   if (!cached) {
-    return null;
-  }
-
-  if (threadId && cached.threadId !== threadId) {
     return null;
   }
 
   return now - cached.savedAt <= ttlMs ? cached : null;
 }
 
-export async function writeSuccessCache(cacheFilePath, result, threadId = "", now = Date.now()) {
+export async function writeSuccessCache(cacheFilePath, result, now = Date.now()) {
   const payload = JSON.stringify(
     {
       savedAt: now,
-      threadId,
       result
     },
     null,

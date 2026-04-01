@@ -3,7 +3,7 @@
 import { loadConfig } from "./config.js";
 import { formatStatus } from "./formatStatus.js";
 import { parseArgs } from "./parseArgs.js";
-import { getSessionId, readStatusLineInput } from "./readStatusLineInput.js";
+import { readStatusLineInput } from "./readStatusLineInput.js";
 import { runQuotaLine } from "./runQuotaLine.js";
 import {
   getToolConfigPath,
@@ -135,8 +135,7 @@ async function main() {
       ...loadConfig(),
       ...(validateStyle(userConfig.style) ? { style: userConfig.style } : {}),
       ...(validateDisplay(userConfig.displayMode) ? { displayMode: userConfig.displayMode } : {}),
-      ...args,
-      threadId: getSessionId(statusLineInput)
+      ...args
     };
     const finalResult = await runQuotaLine(config);
 

@@ -1,6 +1,6 @@
 {
   "name": "glm-quota-line",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Claude Code status line helper for GLM Coding Plan quota.",
   "type": "module",
   "license": "MIT",

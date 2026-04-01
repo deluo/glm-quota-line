@@ -9,7 +9,7 @@ import { Readable } from "node:stream";
 import { loadConfig } from "../src/config.js";
 import { formatStatus } from "../src/formatStatus.js";
 import { parseArgs } from "../src/parseArgs.js";
-import { getSessionId, readStatusLineInput } from "../src/readStatusLineInput.js";
+import { readStatusLineInput } from "../src/readStatusLineInput.js";
 import { runQuotaLine } from "../src/runQuotaLine.js";
 import {
   buildInstalledStatusLineCommand,
@@ -47,14 +47,13 @@ const SUCCESS_BODY = {
   success: true
 };
 
-function createConfig(cacheFilePath, authorization = "token", threadId = "thread-1") {
+function createConfig(cacheFilePath, authorization = "token") {
   return {
     quotaUrl: "https://bigmodel.cn/api/monitor/usage/quota/limit",
     authorization,
     timeoutMs: 5000,
     cacheTtlMs: 300_000,
-    cacheFilePath,
-    threadId
+    cacheFilePath
   };
 }
 
@@ -100,7 +99,6 @@ test("formats a successful response and writes cache", async () => {
     const cached = JSON.parse(await fs.readFile(cacheFilePath, "utf8"));
     assert.equal(cached.result.kind, "success");
     assert.equal(cached.result.leftPercent, 91);
-    assert.equal(cached.threadId, "thread-1");
   });
 });
 
@@ -128,7 +126,6 @@ test("returns fresh cached value without hitting the network", async () => {
       JSON.stringify(
         {
           savedAt: 1774936504000,
-          threadId: "thread-1",
           result: {
             kind: "success",
             level: "lite",
@@ -164,7 +161,6 @@ test("falls back to stale cache on unavailable responses", async () => {
       JSON.stringify(
         {
           savedAt: 1774930000000,
-          threadId: "thread-1",
           result: {
             kind: "success",
             level: "lite",
@@ -200,7 +196,6 @@ test("auth failures do not reuse stale cache", async () => {
       JSON.stringify(
         {
           savedAt: 1774930000000,
-          threadId: "thread-1",
           result: {
             kind: "success",
             level: "lite",
@@ -302,17 +297,27 @@ test("parses CLI args for style and display", () => {
 test("official environment variables take priority and derive the quota URL", () => {
   const config = loadConfig({
     ANTHROPIC_AUTH_TOKEN: "official-token",
-    ANTHROPIC_BASE_URL: "https://open.bigmodel.cn/api/anthropic",
-    CODEX_THREAD_ID: "thread-9"
+    ANTHROPIC_BASE_URL: "https://open.bigmodel.cn/api/anthropic"
   });
 
   assert.equal(config.authorization, "official-token");
   assert.equal(config.quotaUrl, "https://open.bigmodel.cn/api/monitor/usage/quota/limit");
   assert.equal(config.cacheTtlMs, 300_000);
-  assert.equal(config.threadId, "thread-9");
+  assert.ok(config.cacheFilePath.endsWith(".json"));
+  assert.ok(!config.cacheFilePath.endsWith("cache.json"));
 });
 
-test("same thread and fresh cache do not trigger a network request", async () => {
+test("different tokens produce different cache file paths", () => {
+  const configA = loadConfig({ ANTHROPIC_AUTH_TOKEN: "token-alpha" });
+  const configB = loadConfig({ ANTHROPIC_AUTH_TOKEN: "token-beta" });
+  const configEmpty = loadConfig({});
+
+  assert.notEqual(configA.cacheFilePath, configB.cacheFilePath);
+  assert.notEqual(configA.cacheFilePath, configEmpty.cacheFilePath);
+  assert.ok(configEmpty.cacheFilePath.includes("anonymous"));
+});
+
+test("fresh cache does not trigger a network request", async () => {
   await withTempDir(async (dir) => {
     const cacheFilePath = path.join(dir, "cache.json");
     await fs.writeFile(
@@ -320,7 +325,6 @@ test("same thread and fresh cache do not trigger a network request", async () =>
       JSON.stringify(
         {
           savedAt: 1774936504000,
-          threadId: "thread-1",
           result: {
             kind: "success",
             level: "lite",
@@ -349,43 +353,6 @@ test("same thread and fresh cache do not trigger a network request", async () =>
   });
 });
 
-test("a different thread id forces a refresh even when cache is fresh", async () => {
-  await withTempDir(async (dir) => {
-    const cacheFilePath = path.join(dir, "cache.json");
-    await fs.writeFile(
-      cacheFilePath,
-      JSON.stringify(
-        {
-          savedAt: 1774936504000,
-          threadId: "thread-old",
-          result: {
-            kind: "success",
-            level: "lite",
-            display: "percent",
-            leftPercent: 88,
-            usedPercent: 12,
-            nextResetTime: 1774939627716
-          }
-        },
-        null,
-        2
-      )
-    );
-
-    let fetchCalls = 0;
-    const result = await runQuotaLine(createConfig(cacheFilePath, "token", "thread-new"), {
-      now: 1774936505000,
-      fetchImpl: async () => {
-        fetchCalls += 1;
-        return makeJsonResponse(SUCCESS_BODY);
-      }
-    });
-
-    assert.equal(fetchCalls, 1);
-    assert.equal(formatStatus(result), "GLM Lite | 5h left 91% | reset 14:47");
-  });
-});
-
 test("reads Claude status line input JSON from stdin", async () => {
   const stream = Readable.from([
     JSON.stringify({
@@ -397,20 +364,6 @@ test("reads Claude status line input JSON from stdin", async () => {
 
   const input = await readStatusLineInput(stream);
   assert.equal(input.session_id, "claude-session-1");
-});
-
-test("prefers Claude session_id over CODEX_THREAD_ID", () => {
-  const sessionId = getSessionId(
-    { session_id: "claude-session-2" },
-    { CODEX_THREAD_ID: "codex-thread-1" }
-  );
-
-  assert.equal(sessionId, "claude-session-2");
-});
-
-test("falls back to CODEX_THREAD_ID when Claude session metadata is absent", () => {
-  const sessionId = getSessionId(null, { CODEX_THREAD_ID: "codex-thread-2" });
-  assert.equal(sessionId, "codex-thread-2");
 });
 
 test("bar style uses filled cells for used percentage and spaces for unused percentage", () => {

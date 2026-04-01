@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 
@@ -56,17 +57,22 @@ export function loadConfig(env = process.env) {
   const cacheRoot = getCacheRoot();
   const anthropicBaseUrl = env.ANTHROPIC_BASE_URL || "";
   const derivedQuotaUrl = deriveQuotaUrl(anthropicBaseUrl);
+  const authorization = env.ANTHROPIC_AUTH_TOKEN || "";
+
+  const tokenHash = authorization
+    ? crypto.createHash("sha256").update(authorization).digest("hex").slice(0, 12)
+    : "anonymous";
+  const cacheFileName = `cache-${tokenHash}.json`;
 
   return {
     quotaUrl: derivedQuotaUrl || DEFAULT_QUOTA_URL,
-    authorization: env.ANTHROPIC_AUTH_TOKEN || "",
+    authorization,
     anthropicBaseUrl,
     timeoutMs: parsePositiveInt(env.GLM_TIMEOUT_MS, DEFAULT_TIMEOUT_MS),
     cacheTtlMs: parsePositiveInt(env.GLM_CACHE_TTL_MS, DEFAULT_CACHE_TTL_MS),
     displayMode: env.GLM_DISPLAY_MODE || DEFAULT_DISPLAY_MODE,
     style: env.GLM_STYLE || DEFAULT_STYLE,
     barWidth: parsePositiveInt(env.GLM_BAR_WIDTH, DEFAULT_BAR_WIDTH),
-    cacheFilePath: path.join(cacheRoot, "glm-quota-line", "cache.json"),
-    threadId: env.CODEX_THREAD_ID || ""
+    cacheFilePath: path.join(cacheRoot, "glm-quota-line", cacheFileName)
   };
 }
