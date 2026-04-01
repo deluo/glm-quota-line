@@ -32,7 +32,7 @@
     "CHANGELOG.md"
   ],
   "bin": {
-    "glm-quota-line": "./src/cli/index.js"
+    "glm-quota-line": "src/cli/index.js"
   },
   "scripts": {
     "start": "node ./src/cli/index.js",
