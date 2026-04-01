@@ -1,6 +1,6 @@
 {
   "name": "glm-quota-line",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Claude Code status line helper for GLM Coding Plan quota.",
   "type": "module",
   "license": "MIT",
@@ -26,16 +26,16 @@
   },
   "files": [
     "src",
-    "scripts",
     "README.md",
+    "README.zh-CN.md",
     "LICENSE",
     "CHANGELOG.md"
   ],
   "bin": {
-    "glm-quota-line": "./src/cli.js"
+    "glm-quota-line": "./src/cli/index.js"
   },
   "scripts": {
-    "start": "node ./src/cli.js",
+    "start": "node ./src/cli/index.js",
     "test": "node --test"
   },
   "engines": {

@@ -30,36 +30,36 @@ export async function readCache(cacheFilePath) {
       return null;
     }
 
-    if (
-      !Number.isFinite(parsed.savedAt) ||
-      !isSuccessCacheShape(parsed.result)
-    ) {
+    if (!Number.isFinite(parsed.savedAt) || !isSuccessCacheShape(parsed.result)) {
       return null;
     }
 
     return parsed;
-  } catch (error) {
-    if (error && error.code === "ENOENT") {
-      return null;
-    }
-
+  } catch {
     return null;
   }
 }
 
-export async function readFreshCache(cacheFilePath, ttlMs, now = Date.now()) {
+export async function readFreshCache(cacheFilePath, ttlMs, now = Date.now(), sessionId = "") {
   const cached = await readCache(cacheFilePath);
   if (!cached) {
+    return null;
+  }
+
+  // Claude Code opens a fresh status-line process for each session. A new session
+  // should force a refresh even if the previous session left a still-fresh cache.
+  if (sessionId && cached.sessionId !== sessionId) {
     return null;
   }
 
   return now - cached.savedAt <= ttlMs ? cached : null;
 }
 
-export async function writeSuccessCache(cacheFilePath, result, now = Date.now()) {
+export async function writeSuccessCache(cacheFilePath, result, now = Date.now(), sessionId = "") {
   const payload = JSON.stringify(
     {
       savedAt: now,
+      ...(sessionId ? { sessionId } : {}),
       result
     },
     null,

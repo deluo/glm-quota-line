@@ -2,12 +2,20 @@ import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 
-const DEFAULT_QUOTA_URL = "https://bigmodel.cn/api/monitor/usage/quota/limit";
-const DEFAULT_TIMEOUT_MS = 5000;
-const DEFAULT_CACHE_TTL_MS = 300_000;
-const DEFAULT_DISPLAY_MODE = "left";
-const DEFAULT_STYLE = "text";
-const DEFAULT_BAR_WIDTH = 10;
+import {
+  DEFAULT_BAR_WIDTH,
+  DEFAULT_CACHE_TTL_MS,
+  DEFAULT_DISPLAY_MODE,
+  DEFAULT_PALETTE,
+  DEFAULT_QUOTA_URL,
+  DEFAULT_STYLE,
+  DEFAULT_THEME,
+  DEFAULT_TIMEOUT_MS,
+  normalizeDisplayMode,
+  normalizePalette,
+  normalizeStatusStyle,
+  normalizeTheme
+} from "./constants.js";
 
 function parsePositiveInt(value, fallback) {
   if (value === undefined || value === null || value === "") {
@@ -53,12 +61,21 @@ function deriveQuotaUrl(baseUrl) {
   return "";
 }
 
-export function loadConfig(env = process.env) {
-  const cacheRoot = getCacheRoot();
-  const anthropicBaseUrl = env.ANTHROPIC_BASE_URL || "";
-  const derivedQuotaUrl = deriveQuotaUrl(anthropicBaseUrl);
-  const authorization = env.ANTHROPIC_AUTH_TOKEN || "";
+function normalizeOptionalString(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
 
+  return value.trim();
+}
+
+export function loadConfig(env = process.env, overrides = {}) {
+  const anthropicBaseUrl =
+    normalizeOptionalString(overrides.baseUrl) || normalizeOptionalString(env.ANTHROPIC_BASE_URL);
+  const derivedQuotaUrl = deriveQuotaUrl(anthropicBaseUrl);
+  const authorization =
+    normalizeOptionalString(overrides.authToken) ||
+    normalizeOptionalString(env.ANTHROPIC_AUTH_TOKEN);
   const tokenHash = authorization
     ? crypto.createHash("sha256").update(authorization).digest("hex").slice(0, 12)
     : "anonymous";
@@ -70,9 +87,11 @@ export function loadConfig(env = process.env) {
     anthropicBaseUrl,
     timeoutMs: parsePositiveInt(env.GLM_TIMEOUT_MS, DEFAULT_TIMEOUT_MS),
     cacheTtlMs: parsePositiveInt(env.GLM_CACHE_TTL_MS, DEFAULT_CACHE_TTL_MS),
-    displayMode: env.GLM_DISPLAY_MODE || DEFAULT_DISPLAY_MODE,
-    style: env.GLM_STYLE || DEFAULT_STYLE,
+    displayMode: normalizeDisplayMode(env.GLM_DISPLAY_MODE || DEFAULT_DISPLAY_MODE),
+    style: normalizeStatusStyle(env.GLM_STYLE || DEFAULT_STYLE),
+    theme: normalizeTheme(env.GLM_THEME || DEFAULT_THEME),
+    palette: normalizePalette(env.GLM_PALETTE || DEFAULT_PALETTE),
     barWidth: parsePositiveInt(env.GLM_BAR_WIDTH, DEFAULT_BAR_WIDTH),
-    cacheFilePath: path.join(cacheRoot, "glm-quota-line", cacheFileName)
+    cacheFilePath: path.join(getCacheRoot(), "glm-quota-line", cacheFileName)
   };
 }

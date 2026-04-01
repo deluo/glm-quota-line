@@ -7,7 +7,7 @@ function isAuthFailureMessage(value) {
     return false;
   }
 
-  return /authorization|身份验证|鉴权|auth|令牌|token|过期|验证不正确/i.test(value);
+  return /authorization|韬唤楠岃瘉|閴存潈|auth|浠ょ墝|token|杩囨湡|楠岃瘉涓嶆纭?/i.test(value);
 }
 
 function computeTotal(limit) {
@@ -96,3 +96,4 @@ export function parseQuotaResponse(response) {
     nextResetTime
   };
 }
+

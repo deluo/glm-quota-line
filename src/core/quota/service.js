@@ -1,20 +1,17 @@
 import { readCache, readFreshCache, writeSuccessCache } from "./cache.js";
-import { fetchQuota } from "./fetchQuota.js";
-import { parseQuotaResponse } from "./parseQuota.js";
+import { fetchQuota } from "./fetch.js";
+import { parseQuotaResponse } from "./parse.js";
 
-export async function runQuotaLine(config, options = {}) {
+export async function resolveQuotaStatus(config, options = {}) {
   const now = options.now ?? Date.now();
   const fetchImpl = options.fetchImpl;
+  const sessionId = config.sessionId || "";
 
   if (!config.authorization) {
     return { kind: "auth_error" };
   }
 
-  const freshCache = await readFreshCache(
-    config.cacheFilePath,
-    config.cacheTtlMs,
-    now
-  );
+  const freshCache = await readFreshCache(config.cacheFilePath, config.cacheTtlMs, now, sessionId);
   if (freshCache) {
     return freshCache.result;
   }
@@ -24,7 +21,7 @@ export async function runQuotaLine(config, options = {}) {
   const parsed = parseQuotaResponse(response);
 
   if (parsed.kind === "success") {
-    await writeSuccessCache(config.cacheFilePath, parsed, now);
+    await writeSuccessCache(config.cacheFilePath, parsed, now, sessionId);
     return parsed;
   }
 

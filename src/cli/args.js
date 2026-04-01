@@ -47,8 +47,24 @@ export function parseArgs(argv = process.argv.slice(2)) {
       continue;
     }
 
+    if (arg === "--theme" || arg.startsWith("--theme=")) {
+      options.theme = takeValue(argv, index);
+      if (!arg.includes("=")) {
+        index += 1;
+      }
+      continue;
+    }
+
+    if (arg === "--palette" || arg.startsWith("--palette=")) {
+      options.palette = takeValue(argv, index);
+      if (!arg.includes("=")) {
+        index += 1;
+      }
+      continue;
+    }
   }
 
   options.positionals = positionals;
   return options;
 }
+

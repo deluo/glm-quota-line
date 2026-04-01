@@ -6,18 +6,20 @@ import path from "node:path";
 import process from "node:process";
 import { Readable } from "node:stream";
 
-import { loadConfig } from "../src/config.js";
-import { formatStatus } from "../src/formatStatus.js";
-import { parseArgs } from "../src/parseArgs.js";
-import { readStatusLineInput } from "../src/readStatusLineInput.js";
-import { runQuotaLine } from "../src/runQuotaLine.js";
+import { loadConfig } from "../src/shared/config.js";
+import { formatStatus } from "../src/core/status/format.js";
+import { parseArgs } from "../src/cli/args.js";
+import { readStatusLineInput } from "../src/claude/input.js";
+import { resolveQuotaStatus } from "../src/core/quota/service.js";
 import {
-  buildInstalledStatusLineCommand,
+  buildManagedStatusLineCommand,
   installClaudeStatusLine,
-  readToolConfig,
-  setToolConfigValue,
   uninstallClaudeStatusLine
-} from "../src/userConfig.js";
+} from "../src/claude/install.js";
+import {
+  readToolConfig,
+  setToolConfigValue
+} from "../src/claude/settings.js";
 
 const SUCCESS_BODY = {
   code: 200,
@@ -47,7 +49,7 @@ const SUCCESS_BODY = {
   success: true
 };
 
-function createConfig(cacheFilePath, authorization = "token") {
+function createQuotaConfig(cacheFilePath, authorization = "token") {
   return {
     quotaUrl: "https://bigmodel.cn/api/monitor/usage/quota/limit",
     authorization,
@@ -80,7 +82,7 @@ test("formats a successful response and writes cache", async () => {
     const cacheFilePath = path.join(dir, "cache.json");
     let fetchCalls = 0;
 
-    const result = await runQuotaLine(createConfig(cacheFilePath), {
+    const result = await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
       now: 1774936504000,
       fetchImpl: async () => {
         fetchCalls += 1;
@@ -106,7 +108,7 @@ test("returns auth expired without fetching when Authorization is missing", asyn
   await withTempDir(async (dir) => {
     let fetchCalls = 0;
 
-    const result = await runQuotaLine(createConfig(path.join(dir, "cache.json"), ""), {
+    const result = await resolveQuotaStatus(createQuotaConfig(path.join(dir, "cache.json"), ""), {
       fetchImpl: async () => {
         fetchCalls += 1;
         return makeJsonResponse(SUCCESS_BODY);
@@ -140,7 +142,7 @@ test("returns fresh cached value without hitting the network", async () => {
     );
 
     let fetchCalls = 0;
-    const result = await runQuotaLine(createConfig(cacheFilePath), {
+    const result = await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
       now: 1774936505000,
       fetchImpl: async () => {
         fetchCalls += 1;
@@ -174,7 +176,7 @@ test("falls back to stale cache on unavailable responses", async () => {
       )
     );
 
-    const result = await runQuotaLine(createConfig(cacheFilePath), {
+    const result = await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
       now: 1774936505000,
       fetchImpl: async () => ({
         status: 200,
@@ -209,7 +211,7 @@ test("auth failures do not reuse stale cache", async () => {
       )
     );
 
-    const result = await runQuotaLine(createConfig(cacheFilePath), {
+    const result = await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
       now: 1774936505000,
       fetchImpl: async () =>
         makeJsonResponse({
@@ -225,7 +227,7 @@ test("auth failures do not reuse stale cache", async () => {
 
 test("invalid tokens are treated as auth failures", async () => {
   await withTempDir(async (dir) => {
-    const result = await runQuotaLine(createConfig(path.join(dir, "cache.json")), {
+    const result = await resolveQuotaStatus(createQuotaConfig(path.join(dir, "cache.json")), {
       fetchImpl: async () =>
         makeJsonResponse({
           code: 401,
@@ -240,7 +242,7 @@ test("invalid tokens are treated as auth failures", async () => {
 
 test("returns quota unavailable when no cache exists and the response is malformed", async () => {
   await withTempDir(async (dir) => {
-    const result = await runQuotaLine(createConfig(path.join(dir, "cache.json")), {
+    const result = await resolveQuotaStatus(createQuotaConfig(path.join(dir, "cache.json")), {
       fetchImpl: async () => makeJsonResponse({ success: true, data: { limits: [] } })
     });
 
@@ -250,7 +252,7 @@ test("returns quota unavailable when no cache exists and the response is malform
 
 test("falls back to TIME_LIMIT absolute display when rolling-window data is missing", async () => {
   await withTempDir(async (dir) => {
-    const result = await runQuotaLine(createConfig(path.join(dir, "cache.json")), {
+    const result = await resolveQuotaStatus(createQuotaConfig(path.join(dir, "cache.json")), {
       fetchImpl: async () =>
         makeJsonResponse({
           code: 200,
@@ -340,7 +342,7 @@ test("fresh cache does not trigger a network request", async () => {
     );
 
     let fetchCalls = 0;
-    const result = await runQuotaLine(createConfig(cacheFilePath), {
+    const result = await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
       now: 1774936505000,
       fetchImpl: async () => {
         fetchCalls += 1;
@@ -424,7 +426,7 @@ test("installClaudeStatusLine writes a managed statusLine command", async () => 
       )
     );
 
-    const command = buildInstalledStatusLineCommand("C:\\Program Files\\nodejs\\node.exe");
+    const command = buildManagedStatusLineCommand("C:\\Program Files\\nodejs\\node.exe");
     const configPath = path.join(dir, "glm-quota-line.json");
     const result = await installClaudeStatusLine(command, settingsPath, configPath);
     const settings = JSON.parse(await fs.readFile(settingsPath, "utf8"));
@@ -448,7 +450,7 @@ test("installClaudeStatusLine writes a managed statusLine command", async () => 
 test("installClaudeStatusLine does not overwrite unmanaged statusLine without force", async () => {
   await withTempDir(async (dir) => {
     const settingsPath = path.join(dir, "settings.json");
-    const command = buildInstalledStatusLineCommand("C:\\Program Files\\nodejs\\node.exe");
+    const command = buildManagedStatusLineCommand("C:\\Program Files\\nodejs\\node.exe");
     await fs.writeFile(
       settingsPath,
       JSON.stringify(
@@ -479,7 +481,7 @@ test("installClaudeStatusLine does not overwrite unmanaged statusLine without fo
 test("installClaudeStatusLine with force backs up existing unmanaged statusLine", async () => {
   await withTempDir(async (dir) => {
     const settingsPath = path.join(dir, "settings.json");
-    const command = buildInstalledStatusLineCommand("C:\\Program Files\\nodejs\\node.exe");
+    const command = buildManagedStatusLineCommand("C:\\Program Files\\nodejs\\node.exe");
     await fs.writeFile(
       settingsPath,
       JSON.stringify(
@@ -515,7 +517,7 @@ test("uninstallClaudeStatusLine restores previously backed up statusLine", async
   await withTempDir(async (dir) => {
     const settingsPath = path.join(dir, "settings.json");
     const configPath = path.join(dir, "glm-quota-line.json");
-    const command = buildInstalledStatusLineCommand("C:\\Program Files\\nodejs\\node.exe");
+    const command = buildManagedStatusLineCommand("C:\\Program Files\\nodejs\\node.exe");
 
     await fs.writeFile(
       settingsPath,
@@ -563,7 +565,7 @@ test("uninstallClaudeStatusLine removes only managed statusLine entries when no 
   await withTempDir(async (dir) => {
     const settingsPath = path.join(dir, "settings.json");
     const configPath = path.join(dir, "glm-quota-line.json");
-    const command = buildInstalledStatusLineCommand("C:\\Program Files\\nodejs\\node.exe");
+    const command = buildManagedStatusLineCommand("C:\\Program Files\\nodejs\\node.exe");
     await fs.writeFile(
       settingsPath,
       JSON.stringify(

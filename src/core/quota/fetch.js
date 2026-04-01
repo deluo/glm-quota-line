@@ -27,3 +27,4 @@ export async function fetchQuota(config, fetchImpl = globalThis.fetch) {
     return { kind: "unavailable" };
   }
 }
+
