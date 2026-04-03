@@ -19,6 +19,8 @@
 
 `glm-quota-line` 会读取 GLM 配额接口、缓存成功结果，并输出一行适合 `statusLine.command` 的短文本。
 
+它也会安装 Claude Code 的 `SessionStart` hook，在新会话渲染状态栏之前预刷新 quota 缓存。
+
 项目只面向一个宿主：Claude Code。
 
 ## 为什么用它
@@ -35,6 +37,7 @@
 - 支持适合深色和浅色终端的 ANSI 颜色主题
 - 支持手动设置 `auth-token` 和 `base-url`，覆盖代理或网关环境
 - 支持自动安装和卸载 Claude Code 状态栏配置
+- 通过 SessionStart 预刷新，减少新会话首屏短暂显示旧配额的情况
 
 ## 安装
 
@@ -50,7 +53,7 @@ npm install -g glm-quota-line
 npm install -g .
 ```
 
-`npx` 适合一次性试跑，但 Claude Code 的正式集成更适合全局安装，因为 `install` 会把稳定的可执行路径写入 `statusLine.command`。
+`npx` 适合一次性试跑，但 Claude Code 的正式集成更适合全局安装，因为 `install` 会把稳定的可执行路径写入 `statusLine.command` 和受工具管理的 `SessionStart` hooks。
 
 ## 快速开始
 
@@ -154,14 +157,10 @@ glm-quota-line --help
 - 默认输出为纯文本
 - 鉴权缺失或失效时返回 `GLM | auth expired`
 - 接口异常或解析失败时返回 `GLM | quota unavailable`
+- `install` 会同时接入状态栏命令和受工具管理的 `SessionStart` hooks
 - `install` 默认不会覆盖非本工具管理的 Claude 状态栏，除非显式使用 `--force`
 - `install --force` 会备份旧配置，`uninstall` 会在可能时恢复
 
 ## 许可证
 
 [MIT](./LICENSE)
-
-## SessionStart Hook
-
-- `glm-quota-line install` 现在会同时安装 `statusLine.command` 和受工具管理的 `SessionStart` hooks。
-- 这些 hooks 会在 `startup`、`resume`、`clear`、`compact` 时预刷新 quota 缓存，减少新会话首屏显示旧配额的窗口期。
