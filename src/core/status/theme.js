@@ -37,6 +37,7 @@ function applyCodes(text, codes) {
 function getDarkCodes(tone) {
   switch (tone) {
     case "label":
+    case "reset":
       return [ANSI.cyan];
     case "muted":
       return [ANSI.gray];
@@ -60,6 +61,7 @@ function getMonoCodes(tone) {
     case "muted":
     case "barEmpty":
       return [ANSI.dim];
+    case "reset":
     case "label":
     case "good":
     case "warn":

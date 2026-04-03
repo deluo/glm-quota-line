@@ -19,6 +19,8 @@
 
 `glm-quota-line` reads the GLM quota endpoint, caches successful responses, and prints a single short line for `statusLine.command`.
 
+It also installs a Claude Code `SessionStart` hook to pre-refresh the quota cache before a new session renders the status line.
+
 It is intentionally scoped to one host only: Claude Code.
 
 ## Why
@@ -35,6 +37,7 @@ It is intentionally scoped to one host only: Claude Code.
 - Optional ANSI color themes for dark and light terminals
 - Manual `auth-token` and `base-url` overrides for proxy or gateway setups
 - Automatic install and uninstall for Claude Code status line integration
+- SessionStart pre-refresh so a new Claude session does not briefly show stale quota
 
 ## Installation
 
@@ -50,7 +53,7 @@ From a local clone:
 npm install -g .
 ```
 
-`npx` is fine for one-off previews, but global install is the better default for Claude Code integration because `install` writes a stable executable path into `statusLine.command`.
+`npx` is fine for one-off previews, but global install is the better default for Claude Code integration because `install` writes stable executable paths into both `statusLine.command` and the managed `SessionStart` hooks.
 
 ## Quick Start
 
@@ -150,6 +153,7 @@ Run `glm-quota-line --help` for the full command descriptions and examples.
 - Default output is plain text
 - Missing or expired auth returns `GLM | auth expired`
 - API or parsing failures return `GLM | quota unavailable`
+- `install` wires both the status line command and managed `SessionStart` hooks
 - `install` does not replace an unmanaged Claude status line unless `--force` is used
 - `install --force` backs up the previous entry and `uninstall` restores it when possible
 

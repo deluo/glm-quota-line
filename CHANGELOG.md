@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+- Added managed Claude Code `SessionStart` hooks to pre-refresh quota on `startup`, `resume`, `clear`, and `compact`
+- Added token-aware refresh logic so long sessions can refresh before the cache TTL expires
+- Added rate-limit aware cache fallback that skips one token-triggered retry after a limited response
+- Improved install and uninstall so unrelated `SessionStart` hooks are preserved while managed hooks are cleaned up
+- Highlighted reset time in ANSI palettes for better visibility
+
 ## 0.3.0
 
 - Refactored the codebase into clear `cli`, `claude`, `core`, and `shared` layers

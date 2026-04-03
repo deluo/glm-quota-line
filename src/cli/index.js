@@ -32,9 +32,9 @@ Usage:
   glm-quota-line config show
 
 Commands:
-  install                 Install glm-quota-line into Claude Code statusLine.command.
+  install                 Install glm-quota-line into Claude Code statusLine.command and SessionStart hooks.
   install --force         Replace an existing unmanaged status line and back it up.
-  uninstall               Remove the managed status line and restore a backup if one exists.
+  uninstall               Remove the managed status line and SessionStart hooks, and restore a backup if one exists.
   config show             Print the current persisted config. Stored tokens are redacted.
   config set ...          Persist a display option or manual credential override.
   config unset ...        Remove one persisted config key.
@@ -78,6 +78,21 @@ function getStoredDisplayOverrides(userConfig) {
   };
 }
 
+function asNonNegativeNumber(value) {
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function getObservedTokens(statusLineInput) {
+  const inputTokens = asNonNegativeNumber(statusLineInput?.context_window?.total_input_tokens);
+  const outputTokens = asNonNegativeNumber(statusLineInput?.context_window?.total_output_tokens);
+
+  if (inputTokens === null && outputTokens === null) {
+    return null;
+  }
+
+  return (inputTokens ?? 0) + (outputTokens ?? 0);
+}
+
 export async function main() {
   try {
     const args = parseArgs();
@@ -99,7 +114,8 @@ export async function main() {
       // Display config precedence is env defaults -> persisted config -> CLI flags.
       ...getStoredDisplayOverrides(userConfig),
       ...args,
-      sessionId: statusLineInput?.session_id || ""
+      sessionId: statusLineInput?.session_id || "",
+      observedTokens: getObservedTokens(statusLineInput)
     };
     const quotaStatus = await resolveQuotaStatus(config);
 

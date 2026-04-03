@@ -21,46 +21,51 @@ function isSuccessCacheShape(value) {
   return false;
 }
 
-export async function readCache(cacheFilePath) {
-  try {
-    const raw = await fs.readFile(cacheFilePath, "utf8");
-    const parsed = JSON.parse(raw);
-
-    if (!parsed || typeof parsed !== "object") {
-      return null;
-    }
-
-    if (!Number.isFinite(parsed.savedAt) || !isSuccessCacheShape(parsed.result)) {
-      return null;
-    }
-
-    return parsed;
-  } catch {
-    return null;
-  }
+function asFiniteNumber(value) {
+  return Number.isFinite(value) ? value : null;
 }
 
-export async function readFreshCache(cacheFilePath, ttlMs, now = Date.now(), sessionId = "") {
-  const cached = await readCache(cacheFilePath);
-  if (!cached) {
+function normalizeCache(parsed) {
+  if (!parsed || typeof parsed !== "object") {
     return null;
   }
 
-  // Claude Code opens a fresh status-line process for each session. A new session
-  // should force a refresh even if the previous session left a still-fresh cache.
-  if (sessionId && cached.sessionId !== sessionId) {
+  const result = isSuccessCacheShape(parsed.result) ? parsed.result : null;
+  const savedAt = asFiniteNumber(parsed.savedAt);
+  const lastAttemptAt = asFiniteNumber(parsed.lastAttemptAt) ?? savedAt;
+  const lastObservedTokensAtFetch = asFiniteNumber(parsed.lastObservedTokensAtFetch);
+  const sessionId = typeof parsed.sessionId === "string" ? parsed.sessionId : "";
+  const skipNextTokenTrigger = parsed.skipNextTokenTrigger === true;
+
+  if (result && savedAt === null) {
     return null;
   }
 
-  return now - cached.savedAt <= ttlMs ? cached : null;
+  if (!result && savedAt === null && lastAttemptAt === null) {
+    return null;
+  }
+
+  return {
+    savedAt,
+    lastAttemptAt,
+    lastObservedTokensAtFetch,
+    sessionId,
+    skipNextTokenTrigger,
+    result
+  };
 }
 
-export async function writeSuccessCache(cacheFilePath, result, now = Date.now(), sessionId = "") {
+async function writeCache(cacheFilePath, cache) {
   const payload = JSON.stringify(
     {
-      savedAt: now,
-      ...(sessionId ? { sessionId } : {}),
-      result
+      ...(Number.isFinite(cache.savedAt) ? { savedAt: cache.savedAt } : {}),
+      ...(Number.isFinite(cache.lastAttemptAt) ? { lastAttemptAt: cache.lastAttemptAt } : {}),
+      ...(cache.sessionId ? { sessionId: cache.sessionId } : {}),
+      ...(Number.isFinite(cache.lastObservedTokensAtFetch)
+        ? { lastObservedTokensAtFetch: cache.lastObservedTokensAtFetch }
+        : {}),
+      ...(cache.skipNextTokenTrigger ? { skipNextTokenTrigger: true } : {}),
+      ...(cache.result ? { result: cache.result } : {})
     },
     null,
     2
@@ -68,4 +73,52 @@ export async function writeSuccessCache(cacheFilePath, result, now = Date.now(),
 
   await fs.mkdir(path.dirname(cacheFilePath), { recursive: true });
   await fs.writeFile(cacheFilePath, payload, "utf8");
+}
+
+export async function readCache(cacheFilePath) {
+  try {
+    const raw = await fs.readFile(cacheFilePath, "utf8");
+    return normalizeCache(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+export async function writeSuccessCache(cacheFilePath, result, options = {}) {
+  const now = options.now ?? Date.now();
+
+  await writeCache(cacheFilePath, {
+    savedAt: now,
+    lastAttemptAt: now,
+    sessionId: options.sessionId || "",
+    lastObservedTokensAtFetch: asFiniteNumber(options.observedTokens),
+    skipNextTokenTrigger: false,
+    result
+  });
+}
+
+export async function writeRateLimitedCache(cacheFilePath, cached, options = {}) {
+  const now = options.now ?? Date.now();
+
+  await writeCache(cacheFilePath, {
+    savedAt: cached?.savedAt ?? null,
+    lastAttemptAt: now,
+    sessionId: options.sessionId || cached?.sessionId || "",
+    lastObservedTokensAtFetch:
+      asFiniteNumber(options.observedTokens) ?? cached?.lastObservedTokensAtFetch ?? null,
+    skipNextTokenTrigger: true,
+    result: cached?.result ?? null
+  });
+}
+
+export async function writeSkippedTokenTriggerCache(cacheFilePath, cached, options = {}) {
+  await writeCache(cacheFilePath, {
+    savedAt: cached?.savedAt ?? null,
+    lastAttemptAt: cached?.lastAttemptAt ?? null,
+    sessionId: options.sessionId || cached?.sessionId || "",
+    lastObservedTokensAtFetch:
+      asFiniteNumber(options.observedTokens) ?? cached?.lastObservedTokensAtFetch ?? null,
+    skipNextTokenTrigger: false,
+    result: cached?.result ?? null
+  });
 }

@@ -36,7 +36,7 @@ function createTextSegments(model, displayMode) {
       { text: " | 5h used ", tone: "muted" },
       { text: model.usedText, tone: severityTone },
       { text: " | reset ", tone: "muted" },
-      { text: model.resetText, tone: "muted" }
+      { text: model.resetText, tone: "reset" }
     ];
   }
 
@@ -48,7 +48,7 @@ function createTextSegments(model, displayMode) {
       { text: " used ", tone: "muted" },
       { text: model.usedText, tone: severityTone },
       { text: " | reset ", tone: "muted" },
-      { text: model.resetText, tone: "muted" }
+      { text: model.resetText, tone: "reset" }
     ];
   }
 
@@ -58,7 +58,7 @@ function createTextSegments(model, displayMode) {
       { text: " | 5h left ", tone: "muted" },
       { text: model.leftText, tone: severityTone },
       { text: " | reset ", tone: "muted" },
-      { text: model.resetText, tone: "muted" }
+      { text: model.resetText, tone: "reset" }
     ];
   }
 
@@ -74,7 +74,7 @@ function createCompactSegments(model) {
     { text: `${model.compactLabel} `, tone: "label" },
     { text: `${model.leftPercent}%`, tone: getSeverityTone(model) },
     { text: " | ", tone: "muted" },
-    { text: model.resetText, tone: "muted" }
+    { text: model.resetText, tone: "reset" }
   ];
 }
 
@@ -94,7 +94,7 @@ function createBarSegments(model, barWidth) {
     { text: " ", tone: "plain" },
     { text: `${model.leftPercent}%`, tone: severityTone },
     { text: " | ", tone: "muted" },
-    { text: model.resetText, tone: "muted" }
+    { text: model.resetText, tone: "reset" }
   ];
 }
 

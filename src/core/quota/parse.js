@@ -7,7 +7,15 @@ function isAuthFailureMessage(value) {
     return false;
   }
 
-  return /authorization|韬唤楠岃瘉|閴存潈|auth|浠ょ墝|token|杩囨湡|楠岃瘉涓嶆纭?/i.test(value);
+  return /authorization|auth|token/i.test(value);
+}
+
+function isRateLimitedMessage(value) {
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  return /rate\s*limit|too many requests|too frequent|frequency|\u9650\u6d41|\u9891\u7387|\u8fc7\u4e8e\u9891\u7e41|\u7a0d\u540e\u518d\u8bd5/i.test(value);
 }
 
 function computeTotal(limit) {
@@ -35,8 +43,12 @@ function clampPercent(value) {
 }
 
 export function parseQuotaResponse(response) {
-  if (!response || response.kind !== "json") {
+  if (!response || response.kind !== "response") {
     return { kind: "unavailable" };
+  }
+
+  if (response.status === 429 || isRateLimitedMessage(response.text)) {
+    return { kind: "rate_limited" };
   }
 
   const payload = response.json;
@@ -47,6 +59,10 @@ export function parseQuotaResponse(response) {
   if (payload.success !== true) {
     if (payload.code === 1001 || payload.code === 401 || isAuthFailureMessage(payload.msg)) {
       return { kind: "auth_error" };
+    }
+
+    if (isRateLimitedMessage(payload.msg)) {
+      return { kind: "rate_limited" };
     }
 
     return { kind: "unavailable" };
@@ -96,4 +112,3 @@ export function parseQuotaResponse(response) {
     nextResetTime
   };
 }
-

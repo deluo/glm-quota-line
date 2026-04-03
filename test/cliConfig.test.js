@@ -123,7 +123,7 @@ test("cli help includes command descriptions and examples", async () => {
   });
 
   assert.match(stdout, /Commands:/);
-  assert.match(stdout, /Install glm-quota-line into Claude Code statusLine\.command\./);
+  assert.match(stdout, /Install glm-quota-line into Claude Code statusLine\.command and SessionStart hooks\./);
   assert.match(stdout, /Options:/);
   assert.match(stdout, /--palette\s+ANSI palette: dark for dark terminals, mono for light terminals\./);
   assert.match(stdout, /Examples:/);

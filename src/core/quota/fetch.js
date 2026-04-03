@@ -14,17 +14,14 @@ export async function fetchQuota(config, fetchImpl = globalThis.fetch) {
     });
 
     const text = await response.text();
-    let json;
+    let json = null;
 
     try {
       json = JSON.parse(text);
-    } catch {
-      return { kind: "unavailable" };
-    }
+    } catch {}
 
-    return { kind: "json", status: response.status, json };
+    return { kind: "response", status: response.status, json, text };
   } catch {
     return { kind: "unavailable" };
   }
 }
-

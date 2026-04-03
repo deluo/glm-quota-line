@@ -12,6 +12,7 @@ import {
   unsetToolConfigValue
 } from "../claude/settings.js";
 import { installClaudeStatusLine, uninstallClaudeStatusLine } from "../claude/install.js";
+import { refreshQuotaOnSessionStart } from "../claude/sessionStart.js";
 
 function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
@@ -80,7 +81,7 @@ export async function handleCommand(args, output = process.stdout) {
     }
 
     output.write(
-      `Installed Claude Code status line.\nsettings: ${result.settingsPath}\ncommand: ${result.command}\n`
+      `Installed Claude Code status line and SessionStart hooks.\nsettings: ${result.settingsPath}\nstatusLine: ${result.command}\nsessionStart: ${result.sessionStartHookCommand}\n`
     );
     return true;
   }
@@ -100,6 +101,13 @@ export async function handleCommand(args, output = process.stdout) {
     }
 
     output.write(`No Claude Code status line was configured.\nsettings: ${result.settingsPath}\n`);
+    return true;
+  }
+
+  if (command === "session-start-refresh") {
+    try {
+      await refreshQuotaOnSessionStart();
+    } catch {}
     return true;
   }
 

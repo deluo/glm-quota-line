@@ -12,6 +12,7 @@ import { parseArgs } from "../src/cli/args.js";
 import { readStatusLineInput } from "../src/claude/input.js";
 import { resolveQuotaStatus } from "../src/core/quota/service.js";
 import {
+  buildManagedSessionStartRefreshCommand,
   buildManagedStatusLineCommand,
   installClaudeStatusLine,
   uninstallClaudeStatusLine
@@ -20,6 +21,7 @@ import {
   readToolConfig,
   setToolConfigValue
 } from "../src/claude/settings.js";
+import { refreshQuotaOnSessionStart } from "../src/claude/sessionStart.js";
 
 const SUCCESS_BODY = {
   code: 200,
@@ -427,23 +429,110 @@ test("installClaudeStatusLine writes a managed statusLine command", async () => 
     );
 
     const command = buildManagedStatusLineCommand("C:\\Program Files\\nodejs\\node.exe");
+    const sessionStartHookCommand = buildManagedSessionStartRefreshCommand("C:\\Program Files\\nodejs\\node.exe");
     const configPath = path.join(dir, "glm-quota-line.json");
-    const result = await installClaudeStatusLine(command, settingsPath, configPath);
+    const result = await installClaudeStatusLine(command, settingsPath, configPath, {
+      sessionStartHookCommand
+    });
     const settings = JSON.parse(await fs.readFile(settingsPath, "utf8"));
     const toolConfig = await readToolConfig(configPath);
 
     assert.equal(result.installed, true);
     assert.equal(result.command, command);
+    assert.equal(result.sessionStartHookCommand, sessionStartHookCommand);
     assert.equal(settings.theme, "dark");
     assert.deepEqual(settings.statusLine, {
       type: "command",
       command
     });
+    assert.deepEqual(settings.hooks.SessionStart, [
+      {
+        matcher: "startup",
+        hooks: [{ type: "command", command: sessionStartHookCommand }]
+      },
+      {
+        matcher: "resume",
+        hooks: [{ type: "command", command: sessionStartHookCommand }]
+      },
+      {
+        matcher: "clear",
+        hooks: [{ type: "command", command: sessionStartHookCommand }]
+      },
+      {
+        matcher: "compact",
+        hooks: [{ type: "command", command: sessionStartHookCommand }]
+      }
+    ]);
     assert.deepEqual(toolConfig.install, {
       settingsPath,
       command,
-      installed: true
+      installed: true,
+      sessionStartHook: {
+        command: sessionStartHookCommand,
+        matchers: ["startup", "resume", "clear", "compact"],
+        installed: true
+      }
     });
+  });
+});
+
+test("installClaudeStatusLine preserves unrelated SessionStart hooks", async () => {
+  await withTempDir(async (dir) => {
+    const settingsPath = path.join(dir, "settings.json");
+    const command = buildManagedStatusLineCommand("C:\\Program Files\\nodejs\\node.exe");
+    const sessionStartHookCommand = buildManagedSessionStartRefreshCommand("C:\\Program Files\\nodejs\\node.exe");
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify(
+        {
+          hooks: {
+            SessionStart: [
+              {
+                matcher: "startup",
+                hooks: [{ type: "command", command: "echo user-startup" }]
+              },
+              {
+                matcher: "other",
+                hooks: [{ type: "command", command: "echo untouched" }]
+              }
+            ]
+          }
+        },
+        null,
+        2
+      )
+    );
+
+    await installClaudeStatusLine(command, settingsPath, path.join(dir, "glm-quota-line.json"), {
+      sessionStartHookCommand
+    });
+    const settings = JSON.parse(await fs.readFile(settingsPath, "utf8"));
+
+    assert.deepEqual(settings.hooks.SessionStart, [
+      {
+        matcher: "startup",
+        hooks: [
+          { type: "command", command: "echo user-startup" },
+          { type: "command", command: sessionStartHookCommand }
+        ]
+      },
+      {
+        matcher: "other",
+        hooks: [{ type: "command", command: "echo untouched" }]
+      },
+      {
+        matcher: "resume",
+        hooks: [{ type: "command", command: sessionStartHookCommand }]
+      },
+      {
+        matcher: "clear",
+        hooks: [{ type: "command", command: sessionStartHookCommand }]
+      },
+      {
+        matcher: "compact",
+        hooks: [{ type: "command", command: sessionStartHookCommand }]
+      }
+    ]);
   });
 });
 
@@ -474,6 +563,7 @@ test("installClaudeStatusLine does not overwrite unmanaged statusLine without fo
     assert.equal(result.installed, false);
     assert.equal(result.reason, "unmanaged_exists");
     assert.equal(settings.statusLine.command, "echo custom");
+    assert.equal("hooks" in settings, false);
     assert.deepEqual(toolConfig.install, {});
   });
 });
@@ -518,6 +608,7 @@ test("uninstallClaudeStatusLine restores previously backed up statusLine", async
     const settingsPath = path.join(dir, "settings.json");
     const configPath = path.join(dir, "glm-quota-line.json");
     const command = buildManagedStatusLineCommand("C:\\Program Files\\nodejs\\node.exe");
+    const sessionStartHookCommand = buildManagedSessionStartRefreshCommand("C:\\Program Files\\nodejs\\node.exe");
 
     await fs.writeFile(
       settingsPath,
@@ -526,6 +617,17 @@ test("uninstallClaudeStatusLine restores previously backed up statusLine", async
           statusLine: {
             type: "command",
             command
+          },
+          hooks: {
+            SessionStart: [
+              {
+                matcher: "startup",
+                hooks: [
+                  { type: "command", command: "echo user-startup" },
+                  { type: "command", command: sessionStartHookCommand }
+                ]
+              }
+            ]
           }
         },
         null,
@@ -543,6 +645,11 @@ test("uninstallClaudeStatusLine restores previously backed up statusLine", async
             previousStatusLine: {
               type: "command",
               command: "echo previous"
+            },
+            sessionStartHook: {
+              command: sessionStartHookCommand,
+              matchers: ["startup", "resume", "clear", "compact"],
+              installed: true
             }
           }
         },
@@ -557,6 +664,12 @@ test("uninstallClaudeStatusLine restores previously backed up statusLine", async
 
     assert.equal(result.removed, true);
     assert.equal(settings.statusLine.command, "echo previous");
+    assert.deepEqual(settings.hooks.SessionStart, [
+      {
+        matcher: "startup",
+        hooks: [{ type: "command", command: "echo user-startup" }]
+      }
+    ]);
     assert.deepEqual(toolConfig.install, {});
   });
 });
@@ -566,6 +679,7 @@ test("uninstallClaudeStatusLine removes only managed statusLine entries when no 
     const settingsPath = path.join(dir, "settings.json");
     const configPath = path.join(dir, "glm-quota-line.json");
     const command = buildManagedStatusLineCommand("C:\\Program Files\\nodejs\\node.exe");
+    const sessionStartHookCommand = buildManagedSessionStartRefreshCommand("C:\\Program Files\\nodejs\\node.exe");
     await fs.writeFile(
       settingsPath,
       JSON.stringify(
@@ -573,6 +687,14 @@ test("uninstallClaudeStatusLine removes only managed statusLine entries when no 
           statusLine: {
             type: "command",
             command
+          },
+          hooks: {
+            SessionStart: [
+              {
+                matcher: "startup",
+                hooks: [{ type: "command", command: sessionStartHookCommand }]
+              }
+            ]
           },
           theme: "dark"
         },
@@ -587,6 +709,7 @@ test("uninstallClaudeStatusLine removes only managed statusLine entries when no 
     assert.equal(removed.removed, true);
     assert.equal(settings.theme, "dark");
     assert.equal("statusLine" in settings, false);
+    assert.equal("hooks" in settings, false);
   });
 });
 
@@ -613,5 +736,115 @@ test("uninstallClaudeStatusLine leaves unrelated statusLine entries untouched", 
     assert.equal(result.removed, false);
     assert.equal(result.reason, "unmanaged");
     assert.equal(settings.statusLine.command, "echo custom");
+  });
+});
+
+test("uninstallClaudeStatusLine removes managed hooks even if statusLine is already gone", async () => {
+  await withTempDir(async (dir) => {
+    const settingsPath = path.join(dir, "settings.json");
+    const sessionStartHookCommand = buildManagedSessionStartRefreshCommand("C:\\Program Files\\nodejs\\node.exe");
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify(
+        {
+          hooks: {
+            SessionStart: [
+              {
+                matcher: "startup",
+                hooks: [
+                  { type: "command", command: "echo user-startup" },
+                  { type: "command", command: sessionStartHookCommand }
+                ]
+              }
+            ]
+          }
+        },
+        null,
+        2
+      )
+    );
+
+    const result = await uninstallClaudeStatusLine(settingsPath, path.join(dir, "glm-quota-line.json"));
+    const settings = JSON.parse(await fs.readFile(settingsPath, "utf8"));
+
+    assert.equal(result.removed, true);
+    assert.deepEqual(settings.hooks.SessionStart, [
+      {
+        matcher: "startup",
+        hooks: [{ type: "command", command: "echo user-startup" }]
+      }
+    ]);
+  });
+});
+
+test("refreshQuotaOnSessionStart forces a quota refresh and resets observed tokens to zero", async () => {
+  await withTempDir(async (dir) => {
+    const configPath = path.join(dir, "glm-quota-line.json");
+    const cacheFilePath = path.join(dir, "cache.json");
+    await fs.writeFile(
+      configPath,
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          managedBy: "glm-quota-line",
+          install: {}
+        },
+        null,
+        2
+      )
+    );
+    await fs.writeFile(
+      cacheFilePath,
+      JSON.stringify(
+        {
+          savedAt: 1774936504000,
+          lastAttemptAt: 1774936504000,
+          sessionId: "session-old",
+          lastObservedTokensAtFetch: 123456,
+          result: {
+            kind: "success",
+            level: "lite",
+            display: "percent",
+            leftPercent: 88,
+            usedPercent: 12,
+            nextResetTime: 1774939627716
+          }
+        },
+        null,
+        2
+      )
+    );
+
+    const stream = Readable.from([
+      JSON.stringify({
+        session_id: "session-new",
+        source: "startup"
+      })
+    ]);
+    stream.isTTY = false;
+
+    let fetchCalls = 0;
+    const result = await refreshQuotaOnSessionStart({
+      stdin: stream,
+      configPath,
+      loadConfigFn: () => ({
+        quotaUrl: "https://bigmodel.cn/api/monitor/usage/quota/limit",
+        authorization: "token",
+        timeoutMs: 5000,
+        cacheTtlMs: 300_000,
+        cacheFilePath
+      }),
+      fetchImpl: async () => {
+        fetchCalls += 1;
+        return makeJsonResponse(SUCCESS_BODY);
+      },
+      now: 1774936505000
+    });
+
+    const cached = JSON.parse(await fs.readFile(cacheFilePath, "utf8"));
+    assert.equal(fetchCalls, 1);
+    assert.equal(result.kind, "success");
+    assert.equal(cached.sessionId, "session-new");
+    assert.equal(cached.lastObservedTokensAtFetch, 0);
   });
 });

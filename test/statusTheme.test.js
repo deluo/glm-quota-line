@@ -2,8 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { formatStatus } from "../src/core/status/format.js";
-import { buildStatusViewModel } from "../src/core/status/viewModel.js";
 import { buildBar } from "../src/core/status/bar.js";
+import { buildStatusViewModel } from "../src/core/status/viewModel.js";
+import { STATUS_BAR_CHARACTERS } from "../src/shared/constants.js";
 
 function stripAnsi(value) {
   return value.replace(/\u001b\[[0-9;]*m/g, "");
@@ -30,8 +31,9 @@ test("buildStatusViewModel normalizes absolute quota results", () => {
 
 test("buildBar preserves partial-fill semantics", () => {
   const bar = buildBar(3, 10);
-  assert.equal(bar.filledText, "■");
-  assert.equal(bar.emptyText, "□□□□□□□□□");
+
+  assert.equal(bar.filledText, STATUS_BAR_CHARACTERS.filled);
+  assert.equal(bar.emptyText, STATUS_BAR_CHARACTERS.empty.repeat(9));
 });
 
 test("ansi dark theme colors the bar without changing visible text", () => {
@@ -52,9 +54,11 @@ test("ansi dark theme colors the bar without changing visible text", () => {
       env: {}
     }
   );
+  const bar = buildBar(82, 10);
 
   assert.match(output, /\u001b\[/);
-  assert.equal(stripAnsi(output), "GLM Lite ■■■■■■■■□□ 18% | 14:47");
+  assert.match(output, /\u001b\[36m14:47\u001b\[0m/);
+  assert.equal(stripAnsi(output), `GLM Lite ${bar.filledText}${bar.emptyText} 18% | 14:47`);
 });
 
 test("ansi mono theme uses emphasis without changing visible text", () => {
@@ -76,6 +80,7 @@ test("ansi mono theme uses emphasis without changing visible text", () => {
   );
 
   assert.match(output, /\u001b\[/);
+  assert.match(output, /\u001b\[1m14:47\u001b\[0m/);
   assert.equal(stripAnsi(output), "GLM Lite | 5h left 91% | reset 14:47");
 });
 
@@ -97,6 +102,7 @@ test("NO_COLOR forces plain output even when ansi theme is requested", () => {
       env: { NO_COLOR: "1" }
     }
   );
+  const bar = buildBar(9, 10);
 
-  assert.equal(output, "GLM Lite ■□□□□□□□□□ 91% | 14:47");
+  assert.equal(output, `GLM Lite ${bar.filledText}${bar.emptyText} 91% | 14:47`);
 });

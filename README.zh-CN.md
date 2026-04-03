@@ -160,3 +160,8 @@ glm-quota-line --help
 ## 许可证
 
 [MIT](./LICENSE)
+
+## SessionStart Hook
+
+- `glm-quota-line install` 现在会同时安装 `statusLine.command` 和受工具管理的 `SessionStart` hooks。
+- 这些 hooks 会在 `startup`、`resume`、`clear`、`compact` 时预刷新 quota 缓存，减少新会话首屏显示旧配额的窗口期。
