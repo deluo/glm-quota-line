@@ -98,7 +98,7 @@ test("formats a successful response and writes cache", async () => {
     assert.equal(formatStatus(result), "GLM Lite | 5h left 91% | reset 14:47");
     assert.equal(formatStatus(result, { displayMode: "used" }), "GLM Lite | 5h used 9% | reset 14:47");
     assert.equal(formatStatus(result, { style: "compact" }), "GLM 91% | 14:47");
-    assert.equal(formatStatus(result, { style: "bar", barWidth: 10 }), "GLM Lite ■□□□□□□□□□ 91% | 14:47");
+    assert.equal(formatStatus(result, { style: "bar", barWidth: 10 }), "GLM Lite █░░░░░░░░░ 91% | 14:47");
 
     const cached = JSON.parse(await fs.readFile(cacheFilePath, "utf8"));
     assert.equal(cached.result.kind, "success");
@@ -283,7 +283,7 @@ test("falls back to TIME_LIMIT absolute display when rolling-window data is miss
       "GLM Lite | 5h used 10/100 | reset 11:10"
     );
     assert.equal(formatStatus(result, { style: "compact" }), "GLM 90% | 11:10");
-    assert.equal(formatStatus(result, { style: "bar", barWidth: 10 }), "GLM Lite ■□□□□□□□□□ 90% | 11:10");
+    assert.equal(formatStatus(result, { style: "bar", barWidth: 10 }), "GLM Lite █░░░░░░░░░ 90% | 11:10");
   });
 });
 
@@ -380,7 +380,7 @@ test("bar style uses filled cells for used percentage and spaces for unused perc
     nextResetTime: 1774939627716
   };
 
-  assert.equal(formatStatus(result, { style: "bar", barWidth: 10 }), "GLM Lite ■□□□□□□□□□ 97% | 14:47");
+  assert.equal(formatStatus(result, { style: "bar", barWidth: 10 }), "GLM Lite █░░░░░░░░░ 97% | 14:47");
 });
 
 test("bar style fills completely only when used percentage reaches 100", () => {
@@ -393,7 +393,7 @@ test("bar style fills completely only when used percentage reaches 100", () => {
     nextResetTime: 1774939627716
   };
 
-  assert.equal(formatStatus(result, { style: "bar", barWidth: 10 }), "GLM Lite ■■■■■■■■■■ 0% | 14:47");
+  assert.equal(formatStatus(result, { style: "bar", barWidth: 10 }), "GLM Lite ██████████ 0% | 14:47");
 });
 
 test("writes tool config values for style and display", async () => {

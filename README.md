@@ -75,7 +75,7 @@ glm-quota-line --style compact
 ```text
 GLM Lite | 5h left 91% | reset 14:47
 GLM 91% | 14:47
-GLM Lite ■□□□□□□□□□ 91% | 14:47
+GLM Lite █░░░░░░░░░ 91% | 14:47
 ```
 
 ## Recommended Setups

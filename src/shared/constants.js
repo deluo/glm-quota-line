@@ -13,8 +13,8 @@ export const THEMES = ["plain", "ansi"];
 export const PALETTES = ["dark", "mono"];
 
 export const STATUS_BAR_CHARACTERS = {
-  filled: "■",
-  empty: "□"
+  filled: "█",
+  empty: "░"
 };
 
 export const TOOL_CONFIG_SCHEMA_VERSION = 1;

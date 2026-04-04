@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0
+
+- Changed bar characters from `■□` (discrete squares) to `█░` (continuous blocks) to match Claude Code official statusline style
+
 ## 0.4.0
 
 - Added managed Claude Code `SessionStart` hooks to pre-refresh quota on `startup`, `resume`, `clear`, and `compact`
