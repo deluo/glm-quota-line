@@ -1,24 +1,72 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-function isSuccessCacheShape(value) {
+function isValidQuotaShape(value) {
+  if (!value || typeof value.key !== "string") {
+    return false;
+  }
+
+  if (!Number.isFinite(value.leftPercent)) {
+    return false;
+  }
+
+  if (!Number.isFinite(value.usedPercent)) {
+    return false;
+  }
+
+  if ("nextResetTime" in value && !Number.isFinite(value.nextResetTime)) {
+    return false;
+  }
+
+  return true;
+}
+
+function isLegacyPercentSuccessCacheShape(value) {
   if (!value || value.kind !== "success" || typeof value.level !== "string") {
     return false;
   }
 
-  if (!Number.isFinite(value.nextResetTime)) {
+  if (value.display !== "percent") {
     return false;
   }
 
-  if (value.display === "percent") {
-    return Number.isFinite(value.leftPercent);
+  if (!Number.isFinite(value.leftPercent)) {
+    return false;
   }
 
-  if (value.display === "absolute") {
-    return Number.isFinite(value.remaining) && Number.isFinite(value.total);
+  if ("usedPercent" in value && !Number.isFinite(value.usedPercent)) {
+    return false;
   }
 
-  return false;
+  if ("nextResetTime" in value && !Number.isFinite(value.nextResetTime)) {
+    return false;
+  }
+
+  return true;
+}
+
+function isMultiQuotaSuccessCacheShape(value) {
+  if (!value || value.kind !== "success" || typeof value.level !== "string") {
+    return false;
+  }
+
+  if (!Array.isArray(value.quotas) || value.quotas.length === 0) {
+    return false;
+  }
+
+  if (!value.quotas.every(isValidQuotaShape)) {
+    return false;
+  }
+
+  if ("primaryQuotaKey" in value && typeof value.primaryQuotaKey !== "string") {
+    return false;
+  }
+
+  return true;
+}
+
+function isSuccessCacheShape(value) {
+  return isMultiQuotaSuccessCacheShape(value) || isLegacyPercentSuccessCacheShape(value);
 }
 
 function asFiniteNumber(value) {

@@ -1,4 +1,6 @@
 export const DEFAULT_QUOTA_URL = "https://bigmodel.cn/api/monitor/usage/quota/limit";
+export const DEFAULT_CN_BASE_URL = "https://open.bigmodel.cn";
+export const DEFAULT_INTL_BASE_URL = "https://api.z.ai";
 export const DEFAULT_TIMEOUT_MS = 5000;
 export const DEFAULT_CACHE_TTL_MS = 300_000;
 export const DEFAULT_DISPLAY_MODE = "left";

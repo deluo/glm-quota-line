@@ -5,6 +5,8 @@ import path from "node:path";
 import {
   DEFAULT_BAR_WIDTH,
   DEFAULT_CACHE_TTL_MS,
+  DEFAULT_CN_BASE_URL,
+  DEFAULT_INTL_BASE_URL,
   DEFAULT_DISPLAY_MODE,
   DEFAULT_PALETTE,
   DEFAULT_QUOTA_URL,
@@ -45,14 +47,19 @@ function deriveQuotaUrl(baseUrl) {
 
   try {
     const parsedBaseUrl = new URL(baseUrl);
-    const baseDomain = `${parsedBaseUrl.protocol}//${parsedBaseUrl.host}`;
+    const host = parsedBaseUrl.host;
+
+    if (host.includes("api.z.ai")) {
+      return `${DEFAULT_INTL_BASE_URL}/api/monitor/usage/quota/limit`;
+    }
 
     if (
-      parsedBaseUrl.host.includes("api.z.ai") ||
-      parsedBaseUrl.host.includes("open.bigmodel.cn") ||
-      parsedBaseUrl.host.includes("dev.bigmodel.cn")
+      host.includes("open.bigmodel.cn") ||
+      host.includes("dev.bigmodel.cn") ||
+      host === "bigmodel.cn" ||
+      host.endsWith(".bigmodel.cn")
     ) {
-      return `${baseDomain}/api/monitor/usage/quota/limit`;
+      return `${DEFAULT_CN_BASE_URL}/api/monitor/usage/quota/limit`;
     }
   } catch {
     return "";

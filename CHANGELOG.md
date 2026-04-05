@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+- Added official international GLM quota endpoint support for `api.z.ai` while preserving domestic `open.bigmodel.cn` detection
+- Added dual-token status rendering for the new package shape, showing both the 5h quota and weekly quota in `text`, `compact`, and `bar` styles
+- Kept old packages compatible by continuing to read the legacy `TOKENS_LIMIT(number=5)` quota and ignoring `TIME_LIMIT` / MCP usage
+- Updated cache compatibility so existing cached percent-based results still render after upgrading
+- Refreshed English and Chinese README examples to document international setup and the new token-only display behavior
+
 ## 0.5.0
 
 - Changed bar characters from `■□` (discrete squares) to `█░` (continuous blocks) to match Claude Code official statusline style

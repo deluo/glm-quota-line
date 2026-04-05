@@ -1,6 +1,4 @@
 import {
-  AUTH_EXPIRED_TEXT,
-  QUOTA_UNAVAILABLE_TEXT,
   normalizeDisplayMode,
   normalizePalette,
   normalizeStatusStyle,
@@ -26,76 +24,131 @@ function createErrorSegments(model) {
   ];
 }
 
-function createTextSegments(model, displayMode) {
+function createQuotaTextSegments(quota, displayMode, tone) {
   const mode = normalizeDisplayMode(displayMode);
-  const severityTone = getSeverityTone(model);
 
-  if (mode === "used" && model.usedText) {
+  if (mode === "used") {
     return [
-      { text: model.levelLabel, tone: "label" },
-      { text: " | 5h used ", tone: "muted" },
-      { text: model.usedText, tone: severityTone },
-      { text: " | reset ", tone: "muted" },
-      { text: model.resetText, tone: "reset" }
+      { text: `${quota.label} used `, tone: "muted" },
+      { text: quota.usedText, tone }
     ];
   }
 
-  if (mode === "both" && model.leftText && model.usedText) {
+  if (mode === "both") {
     return [
-      { text: model.levelLabel, tone: "label" },
-      { text: " | 5h left ", tone: "muted" },
-      { text: model.leftText, tone: severityTone },
+      { text: `${quota.label} left `, tone: "muted" },
+      { text: quota.leftText, tone },
       { text: " used ", tone: "muted" },
-      { text: model.usedText, tone: severityTone },
-      { text: " | reset ", tone: "muted" },
-      { text: model.resetText, tone: "reset" }
+      { text: quota.usedText, tone }
     ];
-  }
-
-  if (model.leftText) {
-    return [
-      { text: model.levelLabel, tone: "label" },
-      { text: " | 5h left ", tone: "muted" },
-      { text: model.leftText, tone: severityTone },
-      { text: " | reset ", tone: "muted" },
-      { text: model.resetText, tone: "reset" }
-    ];
-  }
-
-  return createErrorSegments({ kind: "unavailable" });
-}
-
-function createCompactSegments(model) {
-  if (!Number.isFinite(model.leftPercent)) {
-    return createErrorSegments({ kind: "unavailable" });
   }
 
   return [
-    { text: `${model.compactLabel} `, tone: "label" },
-    { text: `${model.leftPercent}%`, tone: getSeverityTone(model) },
+    { text: `${quota.label} `, tone: "muted" },
+    { text: quota.leftText, tone }
+  ];
+}
+
+function appendSecondarySegments(segments, model) {
+  if (!model.secondaryQuota) {
+    return segments;
+  }
+
+  return [
+    ...segments,
     { text: " | ", tone: "muted" },
+    { text: `${model.secondaryQuota.label} `, tone: "muted" },
+    { text: model.secondaryQuota.leftText, tone: "plain" }
+  ];
+}
+
+function appendResetSegments(segments, model) {
+  if (!model.resetText) {
+    return segments;
+  }
+
+  return [
+    ...segments,
+    { text: " | reset ", tone: "muted" },
     { text: model.resetText, tone: "reset" }
   ];
 }
 
+function createTextSegments(model, displayMode) {
+  const severityTone = getSeverityTone(model);
+
+  return appendResetSegments(
+    appendSecondarySegments(
+      [
+        { text: model.levelLabel, tone: "label" },
+        { text: " | ", tone: "muted" },
+        ...createQuotaTextSegments(model.primaryQuota, displayMode, severityTone)
+      ],
+      model
+    ),
+    model
+  );
+}
+
+function createCompactSegments(model) {
+  const severityTone = getSeverityTone(model);
+  let segments;
+
+  if (model.secondaryQuota) {
+    segments = [
+      { text: `${model.compactLabel} `, tone: "label" },
+      { text: `${model.primaryQuota.compactLabel} `, tone: "muted" },
+      { text: model.primaryQuota.leftText, tone: severityTone },
+      { text: " ", tone: "plain" },
+      { text: `${model.secondaryQuota.compactLabel} `, tone: "muted" },
+      { text: model.secondaryQuota.leftText, tone: "plain" }
+    ];
+  } else {
+    segments = [
+      { text: `${model.compactLabel} `, tone: "label" },
+      { text: model.primaryQuota.leftText, tone: severityTone }
+    ];
+  }
+
+  if (model.resetText) {
+    segments.push({ text: " | ", tone: "muted" }, { text: model.resetText, tone: "reset" });
+  }
+
+  return segments;
+}
+
 function createBarSegments(model, barWidth) {
-  if (!Number.isFinite(model.leftPercent) || !Number.isFinite(model.usedPercent)) {
+  if (
+    !Number.isFinite(model.primaryQuota?.leftPercent) ||
+    !Number.isFinite(model.primaryQuota?.usedPercent)
+  ) {
     return createErrorSegments({ kind: "unavailable" });
   }
 
-  const bar = buildBar(model.usedPercent, barWidth);
+  const bar = buildBar(model.primaryQuota.usedPercent, barWidth);
   const severityTone = getSeverityTone(model);
-
-  return [
+  const segments = [
     { text: model.levelLabel, tone: "label" },
     { text: " ", tone: "plain" },
     { text: bar.filledText, tone: severityTone },
     { text: bar.emptyText, tone: "barEmpty" },
     { text: " ", tone: "plain" },
-    { text: `${model.leftPercent}%`, tone: severityTone },
-    { text: " | ", tone: "muted" },
-    { text: model.resetText, tone: "reset" }
+    { text: model.primaryQuota.leftText, tone: severityTone }
   ];
+
+  if (model.secondaryQuota) {
+    segments.push(
+      { text: " | ", tone: "muted" },
+      { text: `${model.secondaryQuota.compactLabel} `, tone: "muted" },
+      { text: model.secondaryQuota.leftText, tone: "plain" }
+    );
+  }
+
+  if (model.resetText) {
+    segments.push({ text: " | ", tone: "muted" }, { text: model.resetText, tone: "reset" });
+  }
+
+  return segments;
 }
 
 export function formatStatus(result, options = {}) {

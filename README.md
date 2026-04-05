@@ -1,7 +1,7 @@
 <h1 align="center">glm-quota-line</h1>
 
 <p align="center">
-  Zero-dependency CLI for showing GLM Coding Plan quota in the Claude Code status line.
+  一行命令安装、零依赖，在 Claude Code 状态栏实时显示 GLM 配额余额与重置时间。数据来自官方接口，精准非估算。
 </p>
 
 <p align="center">
@@ -12,50 +12,28 @@
 </p>
 
 <p align="center">
-  <a href="./README.zh-CN.md">简体中文</a>
+  <a href="./README.en.md">English</a>
 </p>
 
-## Overview
+`glm-quota-line` 读取 GLM 配额接口、缓存结果，并输出一行适合 Claude Code `statusLine.command` 的状态文本。通过 `SessionStart` hook 预刷新缓存，新会话不会显示旧配额。
 
-`glm-quota-line` reads the GLM quota endpoint, caches successful responses, and prints a single short line for `statusLine.command`.
+## 功能
 
-It also installs a Claude Code `SessionStart` hook to pre-refresh the quota cache before a new session renders the status line.
+- **一行命令安装** — `glm-quota-line install` 自动接入 Claude Code 状态栏和 `SessionStart` hook
+- **精准配额显示** — 数据来自官方配额接口，非估算；同时展示 5 小时和周 token 配额
+- **国内 + 国际端点** — 自动识别 `open.bigmodel.cn` 和 `api.z.ai`
+- **零依赖** — 无运行时依赖，单一用途
+- **智能缓存** — 按会话、TTL 和 token 用量刷新；支持代理/网关手动覆盖鉴权
 
-It is intentionally scoped to one host only: Claude Code.
-
-## Why
-
-- Built for a single purpose: show GLM quota clearly in Claude Code
-- Small and predictable: no runtime dependencies, no unnecessary abstraction
-- Practical for real usage: cache-aware, session-aware, and easy to install
-
-## Features
-
-- Built for Claude Code `statusLine.command`
-- No runtime dependencies
-- Optional `text`, `compact`, and `bar` layouts
-- Optional ANSI color themes for dark and light terminals
-- Manual `auth-token` and `base-url` overrides for proxy or gateway setups
-- Automatic install and uninstall for Claude Code status line integration
-- SessionStart pre-refresh so a new Claude session does not briefly show stale quota
-
-## Installation
-
-Recommended:
+## 安装
 
 ```bash
 npm install -g glm-quota-line
 ```
 
-From a local clone:
+推荐全局安装，`install` 会将稳定的可执行路径写入 `statusLine.command` 和 `SessionStart` hooks。`npx` 适合一次性试跑。
 
-```bash
-npm install -g .
-```
-
-`npx` is fine for one-off previews, but global install is the better default for Claude Code integration because `install` writes stable executable paths into both `statusLine.command` and the managed `SessionStart` hooks.
-
-## Quick Start
+## 快速开始
 
 ```bash
 glm-quota-line install
@@ -64,71 +42,44 @@ glm-quota-line config set theme ansi
 glm-quota-line config set palette dark
 ```
 
-For a one-off preview:
-
-```bash
-glm-quota-line --style compact
-```
-
-## Output
+## 输出示例
 
 ```text
-GLM Lite | 5h left 91% | reset 14:47
-GLM 91% | 14:47
-GLM Lite █░░░░░░░░░ 91% | 14:47
+GLM Lite | 5h 91% | week 47% | reset 14:47
+
+GLM 5h 91% W 47% | 14:47
+
+GLM Lite █░░░░░░░░░ 91% | W 47% | 14:47
 ```
 
-## Recommended Setups
+同时显示 5 小时配额（主要）和周配额（次要），并自动展示重置时间。
 
-| Use case | Config |
-| --- | --- |
-| Dark terminal | `style=bar`, `theme=ansi`, `palette=dark` |
-| Light terminal | `style=compact`, `theme=ansi`, `palette=mono` |
-| Plain fallback | any `style`, `theme=plain` |
+## 样式与配色
 
-## Color Presets
+| 使用场景   | 配置                                          |
+| ---------- | --------------------------------------------- |
+| 深色终端   | `style=bar`, `theme=ansi`, `palette=dark`     |
+| 浅色终端   | `style=compact`, `theme=ansi`, `palette=mono` |
+| 纯文本回退 | 任意 `style`，`theme=plain`                   |
 
-`style` controls layout. `theme` enables or disables ANSI color. `palette` only applies when `theme=ansi`.
+`style` 控制布局（`text` / `compact` / `bar`），`theme` 控制是否启用 ANSI 颜色，`palette` 仅在 `theme=ansi` 时生效。
 
-- Dark terminal: `theme=ansi` + `palette=dark`
-- Light terminal: `theme=ansi` + `palette=mono`
-- Maximum compatibility: `theme=plain`
+设置 `NO_COLOR=1` 可强制关闭颜色。
 
-Examples:
+## 自定义鉴权
 
-```bash
-glm-quota-line config set style text
-glm-quota-line config set theme ansi
-glm-quota-line config set palette dark
-
-glm-quota-line config set style compact
-glm-quota-line config set theme ansi
-glm-quota-line config set palette mono
-
-glm-quota-line config set theme plain
-```
-
-Set `NO_COLOR=1` to force plain output.
-
-## Manual Credential Overrides
-
-If Claude Code is running behind a gateway or proxy and the injected `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL` are not the real values, store explicit overrides:
+如果 Claude Code 运行在代理或网关后面，注入的 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL` 不是实际值：
 
 ```bash
 glm-quota-line config set auth-token <your-real-token>
 glm-quota-line config set base-url https://open.bigmodel.cn/api/anthropic
+# 或
+glm-quota-line config set base-url https://api.z.ai/api/anthropic
 ```
 
-Clear them later with:
+清除：`glm-quota-line config unset auth-token` / `base-url`。手动保存的值优先于 Claude 注入的环境变量。
 
-```bash
-glm-quota-line config unset auth-token
-glm-quota-line config unset base-url
-```
-
-Stored overrides take precedence over Claude-injected environment variables. `config show` redacts the token, but the local config file still stores the real value in plain text.
-
-## Commands
+## 命令
 
 ```bash
 glm-quota-line [--style text|compact|bar] [--display left|used|both]
@@ -137,26 +88,19 @@ glm-quota-line [--style text|compact|bar] [--display left|used|both]
 glm-quota-line install [--force]
 glm-quota-line uninstall
 glm-quota-line config show
-glm-quota-line config set style <text|compact|bar>
-glm-quota-line config set display <left|used|both>
-glm-quota-line config set theme <plain|ansi>
-glm-quota-line config set palette <dark|mono>
-glm-quota-line config set auth-token <token>
-glm-quota-line config set base-url <url>
-glm-quota-line config unset <style|display|theme|palette|auth-token|base-url>
+glm-quota-line config set <style|display|theme|palette|auth-token|base-url> <value>
+glm-quota-line config unset <key>
 ```
 
-Run `glm-quota-line --help` for the full command descriptions and examples.
+完整说明运行 `glm-quota-line --help`。
 
-## Notes
+## 说明
 
-- Default output is plain text
-- Missing or expired auth returns `GLM | auth expired`
-- API or parsing failures return `GLM | quota unavailable`
-- `install` wires both the status line command and managed `SessionStart` hooks
-- `install` does not replace an unmanaged Claude status line unless `--force` is used
-- `install --force` backs up the previous entry and `uninstall` restores it when possible
+- 只展示 `TOKENS_LIMIT` 配额，忽略 `TIME_LIMIT` / MCP 使用量
+- 鉴权缺失返回 `GLM | auth expired`；接口异常返回 `GLM | quota unavailable`
+- `install` 默认不会覆盖非本工具管理的状态栏，除非使用 `--force`
+- `install --force` 会备份旧配置，`uninstall` 会在可能时恢复
 
-## License
+## 许可证
 
 [MIT](./LICENSE)

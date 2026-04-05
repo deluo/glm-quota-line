@@ -36,14 +36,39 @@ const SUCCESS_BODY = {
         nextResetTime: 1774939627716
       },
       {
+        type: "TOKENS_LIMIT",
+        unit: 4,
+        number: 1,
+        percentage: 53,
+        nextResetTime: 1777518607977
+      }
+    ],
+    level: "lite"
+  },
+  success: true
+};
+
+const LEGACY_SUCCESS_BODY = {
+  code: 200,
+  msg: "操作成功",
+  data: {
+    limits: [
+      {
+        type: "TOKENS_LIMIT",
+        unit: 3,
+        number: 5,
+        percentage: 2,
+        nextResetTime: 1775334953513
+      },
+      {
         type: "TIME_LIMIT",
         unit: 5,
         number: 1,
         usage: 100,
-        currentValue: 0,
-        remaining: 100,
-        percentage: 0,
-        nextResetTime: 1777518607977
+        currentValue: 38,
+        remaining: 62,
+        percentage: 38,
+        nextResetTime: 1777518607998
       }
     ],
     level: "lite"
@@ -95,14 +120,39 @@ test("formats a successful response and writes cache", async () => {
     assert.equal(fetchCalls, 1);
     assert.equal(result.kind, "success");
     assert.equal(result.display, "percent");
-    assert.equal(formatStatus(result), "GLM Lite | 5h left 91% | reset 14:47");
-    assert.equal(formatStatus(result, { displayMode: "used" }), "GLM Lite | 5h used 9% | reset 14:47");
-    assert.equal(formatStatus(result, { style: "compact" }), "GLM 91% | 14:47");
-    assert.equal(formatStatus(result, { style: "bar", barWidth: 10 }), "GLM Lite █░░░░░░░░░ 91% | 14:47");
+    assert.equal(result.primaryQuotaKey, "token_5h");
+    assert.equal(result.quotas.length, 2);
+    assert.equal(formatStatus(result), "GLM Lite | 5h 91% | week 47% | reset 14:47");
+    assert.equal(
+      formatStatus(result, { displayMode: "used" }),
+      "GLM Lite | 5h used 9% | week 47% | reset 14:47"
+    );
+    assert.equal(
+      formatStatus(result, { displayMode: "both" }),
+      "GLM Lite | 5h left 91% used 9% | week 47% | reset 14:47"
+    );
+    assert.equal(formatStatus(result, { style: "compact" }), "GLM 5h 91% W 47% | 14:47");
+    assert.equal(
+      formatStatus(result, { style: "bar", barWidth: 10 }),
+      "GLM Lite █░░░░░░░░░ 91% | W 47% | 14:47"
+    );
 
     const cached = JSON.parse(await fs.readFile(cacheFilePath, "utf8"));
     assert.equal(cached.result.kind, "success");
     assert.equal(cached.result.leftPercent, 91);
+    assert.equal(cached.result.quotas.length, 2);
+  });
+});
+
+test("formats the legacy package response by ignoring TIME_LIMIT", async () => {
+  await withTempDir(async (dir) => {
+    const result = await resolveQuotaStatus(createQuotaConfig(path.join(dir, "cache.json")), {
+      fetchImpl: async () => makeJsonResponse(LEGACY_SUCCESS_BODY)
+    });
+
+    assert.equal(result.kind, "success");
+    assert.equal(result.quotas.length, 1);
+    assert.equal(formatStatus(result), "GLM Lite | 5h 98% | reset 04:35");
   });
 });
 
@@ -153,7 +203,7 @@ test("returns fresh cached value without hitting the network", async () => {
     });
 
     assert.equal(fetchCalls, 0);
-    assert.equal(formatStatus(result), "GLM Lite | 5h left 88% | reset 14:47");
+    assert.equal(formatStatus(result), "GLM Lite | 5h 88% | reset 14:47");
   });
 });
 
@@ -188,7 +238,7 @@ test("falls back to stale cache on unavailable responses", async () => {
       })
     });
 
-    assert.equal(formatStatus(result), "GLM Lite | 5h left 77% | reset 14:47");
+    assert.equal(formatStatus(result), "GLM Lite | 5h 77% | reset 14:47");
   });
 });
 
@@ -252,7 +302,7 @@ test("returns quota unavailable when no cache exists and the response is malform
   });
 });
 
-test("falls back to TIME_LIMIT absolute display when rolling-window data is missing", async () => {
+test("ignores TIME_LIMIT-only payloads and returns unavailable", async () => {
   await withTempDir(async (dir) => {
     const result = await resolveQuotaStatus(createQuotaConfig(path.join(dir, "cache.json")), {
       fetchImpl: async () =>
@@ -276,14 +326,8 @@ test("falls back to TIME_LIMIT absolute display when rolling-window data is miss
         })
     });
 
-    assert.equal(result.display, "absolute");
-    assert.equal(formatStatus(result), "GLM Lite | 5h left 90/100 | reset 11:10");
-    assert.equal(
-      formatStatus(result, { displayMode: "used" }),
-      "GLM Lite | 5h used 10/100 | reset 11:10"
-    );
-    assert.equal(formatStatus(result, { style: "compact" }), "GLM 90% | 11:10");
-    assert.equal(formatStatus(result, { style: "bar", barWidth: 10 }), "GLM Lite █░░░░░░░░░ 90% | 11:10");
+    assert.equal(result.kind, "unavailable");
+    assert.equal(formatStatus(result), "GLM | quota unavailable");
   });
 });
 
@@ -298,7 +342,7 @@ test("parses CLI args for style and display", () => {
   });
 });
 
-test("official environment variables take priority and derive the quota URL", () => {
+test("official domestic environment variables take priority and derive the quota URL", () => {
   const config = loadConfig({
     ANTHROPIC_AUTH_TOKEN: "official-token",
     ANTHROPIC_BASE_URL: "https://open.bigmodel.cn/api/anthropic"
@@ -309,6 +353,104 @@ test("official environment variables take priority and derive the quota URL", ()
   assert.equal(config.cacheTtlMs, 300_000);
   assert.ok(config.cacheFilePath.endsWith(".json"));
   assert.ok(!config.cacheFilePath.endsWith("cache.json"));
+});
+
+test("official international environment variables derive the z.ai quota URL", () => {
+  const config = loadConfig({
+    ANTHROPIC_AUTH_TOKEN: "official-token",
+    ANTHROPIC_BASE_URL: "https://api.z.ai/api/anthropic"
+  });
+
+  assert.equal(config.authorization, "official-token");
+  assert.equal(config.quotaUrl, "https://api.z.ai/api/monitor/usage/quota/limit");
+});
+
+test("default quota URL keeps the legacy domestic fallback when base url is absent", () => {
+  const config = loadConfig({
+    ANTHROPIC_AUTH_TOKEN: "official-token"
+  });
+
+  assert.equal(config.authorization, "official-token");
+  assert.equal(config.quotaUrl, "https://bigmodel.cn/api/monitor/usage/quota/limit");
+});
+
+test("picks the earliest-reset non-5h token window as the weekly quota when extra token limits exist", async () => {
+  await withTempDir(async (dir) => {
+    const result = await resolveQuotaStatus(createQuotaConfig(path.join(dir, "cache.json")), {
+      fetchImpl: async () =>
+        makeJsonResponse({
+          code: 200,
+          msg: "操作成功",
+          success: true,
+          data: {
+            level: "pro",
+            limits: [
+              {
+                type: "TOKENS_LIMIT",
+                unit: 3,
+                number: 5,
+                percentage: 9,
+                nextResetTime: 1774939627716
+              },
+              {
+                type: "TOKENS_LIMIT",
+                unit: 4,
+                number: 30,
+                percentage: 60,
+                nextResetTime: 1778118607977
+              },
+              {
+                type: "TOKENS_LIMIT",
+                unit: 4,
+                number: 1,
+                percentage: 53,
+                nextResetTime: 1777518607977
+              }
+            ]
+          }
+        })
+    });
+
+    assert.equal(result.kind, "success");
+    assert.equal(result.quotas.length, 2);
+    assert.equal(result.quotas[0].key, "token_5h");
+    assert.equal(result.quotas[1].key, "token_week");
+    assert.equal(result.quotas[1].leftPercent, 47);
+    assert.equal(formatStatus(result), "GLM Pro | 5h 91% | week 47% | reset 14:47");
+  });
+});
+
+test("token quota prefers explicit remaining counters over ambiguous percentage semantics", async () => {
+  await withTempDir(async (dir) => {
+    const result = await resolveQuotaStatus(createQuotaConfig(path.join(dir, "cache.json")), {
+      fetchImpl: async () =>
+        makeJsonResponse({
+          code: 200,
+          msg: "操作成功",
+          success: true,
+          data: {
+            level: "lite",
+            limits: [
+              {
+                type: "TOKENS_LIMIT",
+                unit: 3,
+                number: 5,
+                usage: 100,
+                currentValue: 10,
+                remaining: 90,
+                percentage: 90,
+                nextResetTime: 1774939627716
+              }
+            ]
+          }
+        })
+    });
+
+    assert.equal(result.kind, "success");
+    assert.equal(result.leftPercent, 90);
+    assert.equal(result.usedPercent, 10);
+    assert.equal(formatStatus(result), "GLM Lite | 5h 90% | reset 14:47");
+  });
 });
 
 test("different tokens produce different cache file paths", () => {
@@ -353,7 +495,7 @@ test("fresh cache does not trigger a network request", async () => {
     });
 
     assert.equal(fetchCalls, 0);
-    assert.equal(formatStatus(result), "GLM Lite | 5h left 88% | reset 14:47");
+    assert.equal(formatStatus(result), "GLM Lite | 5h 88% | reset 14:47");
   });
 });
 

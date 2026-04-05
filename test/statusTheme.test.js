@@ -10,22 +10,36 @@ function stripAnsi(value) {
   return value.replace(/\u001b\[[0-9;]*m/g, "");
 }
 
-test("buildStatusViewModel normalizes absolute quota results", () => {
+test("buildStatusViewModel prioritizes the 5h token quota and exposes weekly summary", () => {
   const model = buildStatusViewModel({
     kind: "success",
     level: "lite",
-    display: "absolute",
-    remaining: 90,
-    total: 100,
-    nextResetTime: 1777518607977
+    primaryQuotaKey: "token_5h",
+    quotas: [
+      {
+        key: "token_5h",
+        leftPercent: 91,
+        usedPercent: 9,
+        nextResetTime: 1774939627716
+      },
+      {
+        key: "token_week",
+        leftPercent: 47,
+        usedPercent: 53,
+        nextResetTime: 1777518607977
+      }
+    ]
   });
 
   assert.equal(model.kind, "success");
   assert.equal(model.levelLabel, "GLM Lite");
-  assert.equal(model.leftPercent, 90);
-  assert.equal(model.usedPercent, 10);
-  assert.equal(model.leftText, "90/100");
-  assert.equal(model.usedText, "10/100");
+  assert.equal(model.leftPercent, 91);
+  assert.equal(model.usedPercent, 9);
+  assert.equal(model.primaryQuota.label, "5h");
+  assert.equal(model.secondaryQuota.label, "week");
+  assert.equal(model.primaryQuota.leftText, "91%");
+  assert.equal(model.secondaryQuota.leftText, "47%");
+  assert.equal(model.resetText, "14:47");
   assert.equal(model.severity, "good");
 });
 
@@ -81,7 +95,7 @@ test("ansi mono theme uses emphasis without changing visible text", () => {
 
   assert.match(output, /\u001b\[/);
   assert.match(output, /\u001b\[1m14:47\u001b\[0m/);
-  assert.equal(stripAnsi(output), "GLM Lite | 5h left 91% | reset 14:47");
+  assert.equal(stripAnsi(output), "GLM Lite | 5h 91% | reset 14:47");
 });
 
 test("NO_COLOR forces plain output even when ansi theme is requested", () => {
