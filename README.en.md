@@ -33,6 +33,13 @@ npm install -g glm-quota-line
 
 Global install is recommended because `install` writes stable executable paths into `statusLine.command` and `SessionStart` hooks. `npx` works for one-off previews.
 
+Upgrade:
+
+```bash
+npm install -g glm-quota-line
+glm-quota-line check-update
+```
+
 ## Quick Start
 
 ```bash
@@ -87,12 +94,16 @@ glm-quota-line [--style text|compact|bar] [--display left|used|both]
 
 glm-quota-line install [--force]
 glm-quota-line uninstall
+glm-quota-line version
+glm-quota-line check-update
 glm-quota-line config show
 glm-quota-line config set <style|display|theme|palette|auth-token|base-url> <value>
 glm-quota-line config unset <key>
 ```
 
 Run `glm-quota-line --help` for full descriptions.
+
+Use `glm-quota-line --version` to print the installed version. `check-update` only checks and prints the suggested upgrade command; it does not modify your environment.
 
 ## Notes
 

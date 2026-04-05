@@ -13,6 +13,8 @@ import {
 } from "../claude/settings.js";
 import { installClaudeStatusLine, uninstallClaudeStatusLine } from "../claude/install.js";
 import { refreshQuotaOnSessionStart } from "../claude/sessionStart.js";
+import { checkForUpdates } from "./update.js";
+import { getPackageVersion } from "../shared/packageInfo.js";
 
 function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
@@ -66,8 +68,35 @@ const CONFIG_KEYS = {
   }
 };
 
-export async function handleCommand(args, output = process.stdout) {
+export async function handleCommand(args, output = process.stdout, dependencies = {}) {
+  const getVersion = dependencies.getVersion || getPackageVersion;
+  const runUpdateCheck = dependencies.runUpdateCheck || checkForUpdates;
   const [command, subcommand, key, value] = args.positionals;
+
+  if (command === "version") {
+    output.write(`glm-quota-line ${await getVersion()}\n`);
+    return true;
+  }
+
+  if (command === "check-update") {
+    const result = await runUpdateCheck();
+    output.write(`glm-quota-line ${result.currentVersion}\n`);
+
+    if (result.status === "up-to-date") {
+      output.write(`latest: ${result.latestVersion}\nstatus: up to date\n`);
+      return true;
+    }
+
+    if (result.status === "update-available") {
+      output.write(
+        `latest: ${result.latestVersion}\nstatus: update available\nupgrade: ${result.upgradeCommand}\n`
+      );
+      return true;
+    }
+
+    output.write(`status: unable to check updates\nreason: ${result.errorMessage}\n`);
+    return true;
+  }
 
   if (command === "install") {
     const result = await installClaudeStatusLine(undefined, undefined, undefined, {

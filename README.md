@@ -33,6 +33,13 @@ npm install -g glm-quota-line
 
 推荐全局安装，`install` 会将稳定的可执行路径写入 `statusLine.command` 和 `SessionStart` hooks。`npx` 适合一次性试跑。
 
+升级：
+
+```bash
+npm install -g glm-quota-line
+glm-quota-line check-update
+```
+
 ## 快速开始
 
 ```bash
@@ -87,12 +94,16 @@ glm-quota-line [--style text|compact|bar] [--display left|used|both]
 
 glm-quota-line install [--force]
 glm-quota-line uninstall
+glm-quota-line version
+glm-quota-line check-update
 glm-quota-line config show
 glm-quota-line config set <style|display|theme|palette|auth-token|base-url> <value>
 glm-quota-line config unset <key>
 ```
 
 完整说明运行 `glm-quota-line --help`。
+
+`glm-quota-line --version` 可直接查看当前安装版本；`check-update` 只检查并提示升级命令，不会自动修改环境。
 
 ## 说明
 

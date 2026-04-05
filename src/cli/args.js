@@ -26,6 +26,11 @@ export function parseArgs(argv = process.argv.slice(2)) {
       continue;
     }
 
+    if (arg === "--version" || arg === "-v") {
+      options.version = true;
+      continue;
+    }
+
     if (arg === "--force") {
       options.force = true;
       continue;
@@ -67,4 +72,3 @@ export function parseArgs(argv = process.argv.slice(2)) {
   options.positionals = positionals;
   return options;
 }
-

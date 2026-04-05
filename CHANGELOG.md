@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0
+
+- Added `--version` and `version` so the installed CLI version is visible directly from the command line
+- Added `check-update` to compare the installed version with npm and print a suggested upgrade command without auto-updating
+- Improved CLI help and README docs with upgrade and version-check examples
+- Corrected published package metadata to include `README.en.md` in the npm file list
+
 ## 0.6.0
 
 - Added official international GLM quota endpoint support for `api.z.ai` while preserving domestic `open.bigmodel.cn` detection
