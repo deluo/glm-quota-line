@@ -64,8 +64,7 @@ test("ansi dark theme colors the bar without changing visible text", () => {
       style: "bar",
       theme: "ansi",
       palette: "dark",
-      barWidth: 10,
-      env: {}
+      barWidth: 10
     }
   );
   const bar = buildBar(82, 10);
@@ -88,35 +87,11 @@ test("ansi mono theme uses emphasis without changing visible text", () => {
     {
       style: "text",
       theme: "ansi",
-      palette: "mono",
-      env: {}
+      palette: "mono"
     }
   );
 
   assert.match(output, /\u001b\[/);
   assert.match(output, /\u001b\[1m14:47\u001b\[0m/);
   assert.equal(stripAnsi(output), "GLM Lite | 5h 91% | reset 14:47");
-});
-
-test("NO_COLOR forces plain output even when ansi theme is requested", () => {
-  const output = formatStatus(
-    {
-      kind: "success",
-      level: "lite",
-      display: "percent",
-      leftPercent: 91,
-      usedPercent: 9,
-      nextResetTime: 1774939627716
-    },
-    {
-      style: "bar",
-      theme: "ansi",
-      palette: "dark",
-      barWidth: 10,
-      env: { NO_COLOR: "1" }
-    }
-  );
-  const bar = buildBar(9, 10);
-
-  assert.equal(output, `GLM Lite ${bar.filledText}${bar.emptyText} 91% | 14:47`);
 });

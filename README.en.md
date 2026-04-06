@@ -1,7 +1,7 @@
 <h1 align="center">glm-quota-line</h1>
 
 <p align="center">
-  One-command install, zero dependencies. Shows accurate GLM quota balance and reset time in the Claude Code status line — data from the official API, not estimated.
+  One-command install, zero dependencies. Shows accurate Zhipu GLM Coding Plan quota balance and reset time in the Claude Code status line — data from the official API, not estimated.
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
   <a href="./README.md">简体中文</a>
 </p>
 
-`glm-quota-line` reads the GLM quota API, caches results, and prints a short status line for Claude Code's `statusLine.command`. A `SessionStart` hook pre-refreshes the cache so new sessions never show stale data.
+`glm-quota-line` reads the Zhipu GLM Coding Plan quota API, caches results, and prints a short status line for Claude Code's `statusLine.command`. A `SessionStart` hook pre-refreshes the cache so new sessions never show stale data.
 
 ## Features
 
@@ -25,13 +25,20 @@
 - **Zero dependencies** — no runtime deps, single-purpose CLI
 - **Smart caching** — refreshes by session, TTL, and token usage; supports manual auth overrides for proxy/gateway setups
 
-## Installation
+## Quick Start
 
 ```bash
 npm install -g glm-quota-line
+glm-quota-line install
 ```
 
-Global install is recommended because `install` writes stable executable paths into `statusLine.command` and `SessionStart` hooks. `npx` works for one-off previews.
+That's it — works out of the box. Default output (`style=text`, `theme=ansi`, `palette=dark`):
+
+```text
+GLM Lite | 5h 91% | week 47% | reset 14:47
+```
+
+Both the 5-hour quota (primary) and weekly quota (secondary) are shown with automatic reset time.
 
 Upgrade:
 
@@ -40,38 +47,36 @@ npm install -g glm-quota-line
 glm-quota-line check-update
 ```
 
-## Quick Start
+## Custom Styles
+
+All style options are optional — adjust only if needed:
 
 ```bash
-glm-quota-line install
-glm-quota-line config set style bar
-glm-quota-line config set theme ansi
-glm-quota-line config set palette dark
+glm-quota-line config set style bar       # layout: text / compact / bar
+glm-quota-line config set theme ansi      # color: plain / ansi
+glm-quota-line config set palette dark    # palette: dark / mono (only when theme=ansi)
 ```
 
-## Output
+Different `style` outputs:
 
 ```text
+# style=text (default)
 GLM Lite | 5h 91% | week 47% | reset 14:47
 
+# style=compact
 GLM 5h 91% W 47% | 14:47
 
+# style=bar
 GLM Lite █░░░░░░░░░ 91% | W 47% | 14:47
 ```
 
-Both the 5-hour quota (primary) and weekly quota (secondary) are shown with automatic reset time.
-
-## Styles & Colors
+Recommended combinations:
 
 | Use case       | Config                                        |
 | -------------- | --------------------------------------------- |
 | Dark terminal  | `style=bar`, `theme=ansi`, `palette=dark`     |
 | Light terminal | `style=compact`, `theme=ansi`, `palette=mono` |
 | Plain fallback | any `style`, `theme=plain`                    |
-
-`style` controls layout (`text` / `compact` / `bar`). `theme` enables ANSI color. `palette` only applies when `theme=ansi`.
-
-Set `NO_COLOR=1` to force plain output.
 
 ## Custom Auth
 

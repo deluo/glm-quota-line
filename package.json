@@ -1,17 +1,19 @@
 {
   "name": "glm-quota-line",
-  "version": "0.7.0",
-  "description": "Claude Code status line helper for GLM Coding Plan quota.",
+  "version": "0.8.0",
+  "description": "Zhipu GLM Coding Plan quota monitor for Claude Code status line.",
   "type": "module",
   "license": "MIT",
   "author": "caojian",
   "preferGlobal": true,
   "keywords": [
     "claude-code",
-    "statusline",
     "glm",
+    "zhipu",
+    "z.ai",
+    "coding-plan",
     "quota",
-    "cli"
+    "statusline"
   ],
   "repository": {
     "type": "git",

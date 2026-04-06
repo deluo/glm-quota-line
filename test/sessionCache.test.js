@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 
 import { resolveQuotaStatus } from "../src/core/quota/service.js";
+import { createQuotaConfig, makeJsonResponse, withTempDir } from "./helpers.js";
 
 const SUCCESS_BODY = {
   code: 200,
@@ -23,34 +23,6 @@ const SUCCESS_BODY = {
   },
   success: true
 };
-
-function createQuotaConfig(cacheFilePath, authorization = "token") {
-  return {
-    quotaUrl: "https://bigmodel.cn/api/monitor/usage/quota/limit",
-    authorization,
-    timeoutMs: 5000,
-    cacheTtlMs: 300_000,
-    cacheFilePath
-  };
-}
-
-async function withTempDir(run) {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "glm-quota-line-"));
-  try {
-    await run(dir);
-  } finally {
-    await fs.rm(dir, { recursive: true, force: true });
-  }
-}
-
-function makeJsonResponse(body, status = 200) {
-  return {
-    status,
-    async text() {
-      return JSON.stringify(body);
-    }
-  };
-}
 
 test("new Claude sessions bypass fresh cache and refresh the quota snapshot", async () => {
   await withTempDir(async (dir) => {

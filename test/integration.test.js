@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { Readable } from "node:stream";
@@ -22,6 +21,7 @@ import {
   setToolConfigValue
 } from "../src/claude/settings.js";
 import { refreshQuotaOnSessionStart } from "../src/claude/sessionStart.js";
+import { createQuotaConfig, makeJsonResponse, withTempDir } from "./helpers.js";
 
 const SUCCESS_BODY = {
   code: 200,
@@ -76,34 +76,6 @@ const LEGACY_SUCCESS_BODY = {
   success: true
 };
 
-function createQuotaConfig(cacheFilePath, authorization = "token") {
-  return {
-    quotaUrl: "https://bigmodel.cn/api/monitor/usage/quota/limit",
-    authorization,
-    timeoutMs: 5000,
-    cacheTtlMs: 300_000,
-    cacheFilePath
-  };
-}
-
-async function withTempDir(run) {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "glm-quota-line-"));
-  try {
-    await run(dir);
-  } finally {
-    await fs.rm(dir, { recursive: true, force: true });
-  }
-}
-
-function makeJsonResponse(body, status = 200) {
-  return {
-    status,
-    async text() {
-      return JSON.stringify(body);
-    }
-  };
-}
-
 test("formats a successful response and writes cache", async () => {
   await withTempDir(async (dir) => {
     const cacheFilePath = path.join(dir, "cache.json");
@@ -122,18 +94,18 @@ test("formats a successful response and writes cache", async () => {
     assert.equal(result.display, "percent");
     assert.equal(result.primaryQuotaKey, "token_5h");
     assert.equal(result.quotas.length, 2);
-    assert.equal(formatStatus(result), "GLM Lite | 5h 91% | week 47% | reset 14:47");
+    assert.equal(formatStatus(result, { theme: "plain" }), "GLM Lite | 5h 91% | week 47% | reset 14:47");
     assert.equal(
-      formatStatus(result, { displayMode: "used" }),
+      formatStatus(result, { theme: "plain", displayMode: "used" }),
       "GLM Lite | 5h used 9% | week 47% | reset 14:47"
     );
     assert.equal(
-      formatStatus(result, { displayMode: "both" }),
+      formatStatus(result, { theme: "plain", displayMode: "both" }),
       "GLM Lite | 5h left 91% used 9% | week 47% | reset 14:47"
     );
-    assert.equal(formatStatus(result, { style: "compact" }), "GLM 5h 91% W 47% | 14:47");
+    assert.equal(formatStatus(result, { theme: "plain", style: "compact" }), "GLM 5h 91% W 47% | 14:47");
     assert.equal(
-      formatStatus(result, { style: "bar", barWidth: 10 }),
+      formatStatus(result, { theme: "plain", style: "bar", barWidth: 10 }),
       "GLM Lite █░░░░░░░░░ 91% | W 47% | 14:47"
     );
 
@@ -152,7 +124,7 @@ test("formats the legacy package response by ignoring TIME_LIMIT", async () => {
 
     assert.equal(result.kind, "success");
     assert.equal(result.quotas.length, 1);
-    assert.equal(formatStatus(result), "GLM Lite | 5h 98% | reset 04:35");
+    assert.equal(formatStatus(result, { theme: "plain" }), "GLM Lite | 5h 98% | reset 04:35");
   });
 });
 
@@ -168,7 +140,7 @@ test("returns auth expired without fetching when Authorization is missing", asyn
     });
 
     assert.equal(fetchCalls, 0);
-    assert.equal(formatStatus(result), "GLM | auth expired");
+    assert.equal(formatStatus(result, { theme: "plain" }), "GLM | auth expired");
   });
 });
 
@@ -203,7 +175,7 @@ test("returns fresh cached value without hitting the network", async () => {
     });
 
     assert.equal(fetchCalls, 0);
-    assert.equal(formatStatus(result), "GLM Lite | 5h 88% | reset 14:47");
+    assert.equal(formatStatus(result, { theme: "plain" }), "GLM Lite | 5h 88% | reset 14:47");
   });
 });
 
@@ -238,7 +210,7 @@ test("falls back to stale cache on unavailable responses", async () => {
       })
     });
 
-    assert.equal(formatStatus(result), "GLM Lite | 5h 77% | reset 14:47");
+    assert.equal(formatStatus(result, { theme: "plain" }), "GLM Lite | 5h 77% | reset 14:47");
   });
 });
 
@@ -273,7 +245,7 @@ test("auth failures do not reuse stale cache", async () => {
         })
     });
 
-    assert.equal(formatStatus(result), "GLM | auth expired");
+    assert.equal(formatStatus(result, { theme: "plain" }), "GLM | auth expired");
   });
 });
 
@@ -288,7 +260,7 @@ test("invalid tokens are treated as auth failures", async () => {
         })
     });
 
-    assert.equal(formatStatus(result), "GLM | auth expired");
+    assert.equal(formatStatus(result, { theme: "plain" }), "GLM | auth expired");
   });
 });
 
@@ -298,7 +270,7 @@ test("returns quota unavailable when no cache exists and the response is malform
       fetchImpl: async () => makeJsonResponse({ success: true, data: { limits: [] } })
     });
 
-    assert.equal(formatStatus(result), "GLM | quota unavailable");
+    assert.equal(formatStatus(result, { theme: "plain" }), "GLM | quota unavailable");
   });
 });
 
@@ -327,7 +299,7 @@ test("ignores TIME_LIMIT-only payloads and returns unavailable", async () => {
     });
 
     assert.equal(result.kind, "unavailable");
-    assert.equal(formatStatus(result), "GLM | quota unavailable");
+    assert.equal(formatStatus(result, { theme: "plain" }), "GLM | quota unavailable");
   });
 });
 
@@ -350,7 +322,7 @@ test("official domestic environment variables take priority and derive the quota
 
   assert.equal(config.authorization, "official-token");
   assert.equal(config.quotaUrl, "https://open.bigmodel.cn/api/monitor/usage/quota/limit");
-  assert.equal(config.cacheTtlMs, 300_000);
+  assert.equal(config.cacheTtlMs, 600_000);
   assert.ok(config.cacheFilePath.endsWith(".json"));
   assert.ok(!config.cacheFilePath.endsWith("cache.json"));
 });
@@ -416,7 +388,7 @@ test("picks the earliest-reset non-5h token window as the weekly quota when extr
     assert.equal(result.quotas[0].key, "token_5h");
     assert.equal(result.quotas[1].key, "token_week");
     assert.equal(result.quotas[1].leftPercent, 47);
-    assert.equal(formatStatus(result), "GLM Pro | 5h 91% | week 47% | reset 14:47");
+    assert.equal(formatStatus(result, { theme: "plain" }), "GLM Pro | 5h 91% | week 47% | reset 14:47");
   });
 });
 
@@ -449,7 +421,7 @@ test("token quota prefers explicit remaining counters over ambiguous percentage 
     assert.equal(result.kind, "success");
     assert.equal(result.leftPercent, 90);
     assert.equal(result.usedPercent, 10);
-    assert.equal(formatStatus(result), "GLM Lite | 5h 90% | reset 14:47");
+    assert.equal(formatStatus(result, { theme: "plain" }), "GLM Lite | 5h 90% | reset 14:47");
   });
 });
 
@@ -495,7 +467,7 @@ test("fresh cache does not trigger a network request", async () => {
     });
 
     assert.equal(fetchCalls, 0);
-    assert.equal(formatStatus(result), "GLM Lite | 5h 88% | reset 14:47");
+    assert.equal(formatStatus(result, { theme: "plain" }), "GLM Lite | 5h 88% | reset 14:47");
   });
 });
 
@@ -522,7 +494,7 @@ test("bar style uses filled cells for used percentage and spaces for unused perc
     nextResetTime: 1774939627716
   };
 
-  assert.equal(formatStatus(result, { style: "bar", barWidth: 10 }), "GLM Lite █░░░░░░░░░ 97% | 14:47");
+  assert.equal(formatStatus(result, { theme: "plain", style: "bar", barWidth: 10 }), "GLM Lite █░░░░░░░░░ 97% | 14:47");
 });
 
 test("bar style fills completely only when used percentage reaches 100", () => {
@@ -535,7 +507,7 @@ test("bar style fills completely only when used percentage reaches 100", () => {
     nextResetTime: 1774939627716
   };
 
-  assert.equal(formatStatus(result, { style: "bar", barWidth: 10 }), "GLM Lite ██████████ 0% | 14:47");
+  assert.equal(formatStatus(result, { theme: "plain", style: "bar", barWidth: 10 }), "GLM Lite ██████████ 0% | 14:47");
 });
 
 test("writes tool config values for style and display", async () => {
@@ -599,10 +571,6 @@ test("installClaudeStatusLine writes a managed statusLine command", async () => 
       {
         matcher: "clear",
         hooks: [{ type: "command", command: sessionStartHookCommand }]
-      },
-      {
-        matcher: "compact",
-        hooks: [{ type: "command", command: sessionStartHookCommand }]
       }
     ]);
     assert.deepEqual(toolConfig.install, {
@@ -611,7 +579,7 @@ test("installClaudeStatusLine writes a managed statusLine command", async () => 
       installed: true,
       sessionStartHook: {
         command: sessionStartHookCommand,
-        matchers: ["startup", "resume", "clear", "compact"],
+        matchers: ["startup", "resume", "clear"],
         installed: true
       }
     });
@@ -668,10 +636,6 @@ test("installClaudeStatusLine preserves unrelated SessionStart hooks", async () 
       },
       {
         matcher: "clear",
-        hooks: [{ type: "command", command: sessionStartHookCommand }]
-      },
-      {
-        matcher: "compact",
         hooks: [{ type: "command", command: sessionStartHookCommand }]
       }
     ]);
@@ -790,7 +754,7 @@ test("uninstallClaudeStatusLine restores previously backed up statusLine", async
             },
             sessionStartHook: {
               command: sessionStartHookCommand,
-              matchers: ["startup", "resume", "clear", "compact"],
+              matchers: ["startup", "resume", "clear"],
               installed: true
             }
           }
@@ -919,7 +883,7 @@ test("uninstallClaudeStatusLine removes managed hooks even if statusLine is alre
   });
 });
 
-test("refreshQuotaOnSessionStart forces a quota refresh and resets observed tokens to zero", async () => {
+test("refreshQuotaOnSessionStart forces a quota refresh and updates the session cache", async () => {
   await withTempDir(async (dir) => {
     const configPath = path.join(dir, "glm-quota-line.json");
     const cacheFilePath = path.join(dir, "cache.json");
@@ -942,7 +906,6 @@ test("refreshQuotaOnSessionStart forces a quota refresh and resets observed toke
           savedAt: 1774936504000,
           lastAttemptAt: 1774936504000,
           sessionId: "session-old",
-          lastObservedTokensAtFetch: 123456,
           result: {
             kind: "success",
             level: "lite",
@@ -973,7 +936,7 @@ test("refreshQuotaOnSessionStart forces a quota refresh and resets observed toke
         quotaUrl: "https://bigmodel.cn/api/monitor/usage/quota/limit",
         authorization: "token",
         timeoutMs: 5000,
-        cacheTtlMs: 300_000,
+        cacheTtlMs: 600_000,
         cacheFilePath
       }),
       fetchImpl: async () => {
@@ -987,6 +950,5 @@ test("refreshQuotaOnSessionStart forces a quota refresh and resets observed toke
     assert.equal(fetchCalls, 1);
     assert.equal(result.kind, "success");
     assert.equal(cached.sessionId, "session-new");
-    assert.equal(cached.lastObservedTokensAtFetch, 0);
   });
 });

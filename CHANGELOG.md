@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0
+
+- Added progressive refresh backoff: new sessions start at 3-minute intervals, advance to 5 minutes after 5 refreshes, and cap at 10 minutes after 5 more — giving new users fast feedback while reducing API pressure in long sessions
+- Added low-quota override: when remaining quota drops below 30%, the refresh interval is forced back to 3 minutes regardless of current tier, so users see accurate data when it matters most
+- Low-quota refreshes do not advance the tier counter, preserving the previous tier when quota recovers
+- SessionStart (startup / resume / clear) resets the tier to level 0, ensuring fresh sessions always start responsive
+- Rate-limited and failed responses no longer advance the tier counter
+- Old cache files without tier fields automatically migrate to tier 0
+- Simplified README quick start to two commands with style config clearly marked as optional
+
 ## 0.7.0
 
 - Added `--version` and `version` so the installed CLI version is visible directly from the command line

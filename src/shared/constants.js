@@ -2,17 +2,20 @@ export const DEFAULT_QUOTA_URL = "https://bigmodel.cn/api/monitor/usage/quota/li
 export const DEFAULT_CN_BASE_URL = "https://open.bigmodel.cn";
 export const DEFAULT_INTL_BASE_URL = "https://api.z.ai";
 export const DEFAULT_TIMEOUT_MS = 5000;
-export const DEFAULT_CACHE_TTL_MS = 300_000;
+export const DEFAULT_CACHE_TTL_MS = 600_000;
+
+export const REFRESH_TIERS = [
+  { ttlMs: 180_000, maxRefreshes: 5 },   // 3 min × 5
+  { ttlMs: 300_000, maxRefreshes: 5 },   // 5 min × 5
+  { ttlMs: 600_000, maxRefreshes: Infinity } // 10 min (cap)
+];
+
+export const LOW_QUOTA_THRESHOLD = 30;
 export const DEFAULT_DISPLAY_MODE = "left";
 export const DEFAULT_STYLE = "text";
 export const DEFAULT_BAR_WIDTH = 10;
-export const DEFAULT_THEME = "plain";
+export const DEFAULT_THEME = "ansi";
 export const DEFAULT_PALETTE = "dark";
-
-export const STATUS_STYLES = ["text", "compact", "bar"];
-export const DISPLAY_MODES = ["left", "used", "both"];
-export const THEMES = ["plain", "ansi"];
-export const PALETTES = ["dark", "mono"];
 
 export const STATUS_BAR_CHARACTERS = {
   filled: "█",
@@ -22,23 +25,20 @@ export const STATUS_BAR_CHARACTERS = {
 export const TOOL_CONFIG_SCHEMA_VERSION = 1;
 export const TOOL_CONFIG_MANAGED_BY = "glm-quota-line";
 
-export const QUOTA_UNAVAILABLE_TEXT = "GLM | quota unavailable";
-export const AUTH_EXPIRED_TEXT = "GLM | auth expired";
-
 export function isValidStatusStyle(value) {
-  return STATUS_STYLES.includes(value);
+  return value === "text" || value === "compact" || value === "bar";
 }
 
 export function isValidDisplayMode(value) {
-  return DISPLAY_MODES.includes(value);
+  return value === "left" || value === "used" || value === "both";
 }
 
 export function isValidTheme(value) {
-  return THEMES.includes(value);
+  return value === "plain" || value === "ansi";
 }
 
 export function isValidPalette(value) {
-  return PALETTES.includes(value);
+  return value === "dark" || value === "mono";
 }
 
 export function normalizeStatusStyle(value) {

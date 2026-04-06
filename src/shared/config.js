@@ -12,21 +12,8 @@ import {
   DEFAULT_QUOTA_URL,
   DEFAULT_STYLE,
   DEFAULT_THEME,
-  DEFAULT_TIMEOUT_MS,
-  normalizeDisplayMode,
-  normalizePalette,
-  normalizeStatusStyle,
-  normalizeTheme
+  DEFAULT_TIMEOUT_MS
 } from "./constants.js";
-
-function parsePositiveInt(value, fallback) {
-  if (value === undefined || value === null || value === "") {
-    return fallback;
-  }
-
-  const parsed = Number.parseInt(String(value), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
 
 function getCacheRoot() {
   if (process.platform === "darwin") {
@@ -68,7 +55,7 @@ function deriveQuotaUrl(baseUrl) {
   return "";
 }
 
-function normalizeOptionalString(value) {
+export function normalizeOptionalString(value) {
   if (typeof value !== "string") {
     return "";
   }
@@ -92,13 +79,13 @@ export function loadConfig(env = process.env, overrides = {}) {
     quotaUrl: derivedQuotaUrl || DEFAULT_QUOTA_URL,
     authorization,
     anthropicBaseUrl,
-    timeoutMs: parsePositiveInt(env.GLM_TIMEOUT_MS, DEFAULT_TIMEOUT_MS),
-    cacheTtlMs: parsePositiveInt(env.GLM_CACHE_TTL_MS, DEFAULT_CACHE_TTL_MS),
-    displayMode: normalizeDisplayMode(env.GLM_DISPLAY_MODE || DEFAULT_DISPLAY_MODE),
-    style: normalizeStatusStyle(env.GLM_STYLE || DEFAULT_STYLE),
-    theme: normalizeTheme(env.GLM_THEME || DEFAULT_THEME),
-    palette: normalizePalette(env.GLM_PALETTE || DEFAULT_PALETTE),
-    barWidth: parsePositiveInt(env.GLM_BAR_WIDTH, DEFAULT_BAR_WIDTH),
+    timeoutMs: DEFAULT_TIMEOUT_MS,
+    cacheTtlMs: DEFAULT_CACHE_TTL_MS,
+    displayMode: DEFAULT_DISPLAY_MODE,
+    style: DEFAULT_STYLE,
+    theme: DEFAULT_THEME,
+    palette: DEFAULT_PALETTE,
+    barWidth: DEFAULT_BAR_WIDTH,
     cacheFilePath: path.join(getCacheRoot(), "glm-quota-line", cacheFileName)
   };
 }

@@ -32,7 +32,7 @@ function isToolManagedStatusLine(statusLine) {
   return isToolManagedCommand(statusLine?.command);
 }
 
-export function getStatusLineEntryPath() {
+function getStatusLineEntryPath() {
   return path.resolve(__dirname, "..", "cli", "index.js");
 }
 
@@ -53,6 +53,29 @@ function isToolManagedHook(hook) {
   return hook?.type === "command" && isToolManagedCommand(hook.command);
 }
 
+function filterManagedHooksFromGroups(groups) {
+  let hadManaged = false;
+  const filtered = [];
+
+  for (const group of groups) {
+    if (!group || typeof group !== "object" || !Array.isArray(group.hooks)) {
+      filtered.push(group);
+      continue;
+    }
+
+    const nextHooks = group.hooks.filter((hook) => !isToolManagedHook(hook));
+    if (nextHooks.length !== group.hooks.length) {
+      hadManaged = true;
+    }
+
+    if (nextHooks.length > 0) {
+      filtered.push({ ...group, hooks: nextHooks });
+    }
+  }
+
+  return { groups: filtered, hadManaged };
+}
+
 function removeManagedSessionStartHooks(settings) {
   if (!settings.hooks || typeof settings.hooks !== "object") {
     return false;
@@ -63,27 +86,7 @@ function removeManagedSessionStartHooks(settings) {
     return false;
   }
 
-  let removed = false;
-  const nextGroups = [];
-
-  for (const group of existingGroups) {
-    if (!group || typeof group !== "object" || !Array.isArray(group.hooks)) {
-      nextGroups.push(group);
-      continue;
-    }
-
-    const nextHooks = group.hooks.filter((hook) => !isToolManagedHook(hook));
-    if (nextHooks.length !== group.hooks.length) {
-      removed = true;
-    }
-
-    if (nextHooks.length > 0) {
-      nextGroups.push({
-        ...group,
-        hooks: nextHooks
-      });
-    }
-  }
+  const { groups: nextGroups, hadManaged: removed } = filterManagedHooksFromGroups(existingGroups);
 
   if (nextGroups.length > 0) {
     settings.hooks.SessionStart = nextGroups;
@@ -101,21 +104,10 @@ function removeManagedSessionStartHooks(settings) {
 function installManagedSessionStartHooks(settings, command) {
   const existingGroups =
     settings.hooks && typeof settings.hooks === "object" && Array.isArray(settings.hooks.SessionStart)
-      ? settings.hooks.SessionStart.map((group) =>
-          group && typeof group === "object" ? { ...group, hooks: Array.isArray(group.hooks) ? [...group.hooks] : group.hooks } : group
-        )
+      ? settings.hooks.SessionStart
       : [];
 
-  const nextGroups = existingGroups.map((group) => {
-    if (!group || typeof group !== "object" || !Array.isArray(group.hooks)) {
-      return group;
-    }
-
-    return {
-      ...group,
-      hooks: group.hooks.filter((hook) => !isToolManagedHook(hook))
-    };
-  });
+  const { groups: nextGroups } = filterManagedHooksFromGroups(existingGroups);
 
   for (const matcher of SESSION_START_MATCHERS) {
     const targetGroup = nextGroups.find(
@@ -123,21 +115,13 @@ function installManagedSessionStartHooks(settings, command) {
     );
 
     if (targetGroup) {
-      targetGroup.hooks.push({
-        type: "command",
-        command
-      });
+      targetGroup.hooks.push({ type: "command", command });
       continue;
     }
 
     nextGroups.push({
       matcher,
-      hooks: [
-        {
-          type: "command",
-          command
-        }
-      ]
+      hooks: [{ type: "command", command }]
     });
   }
 

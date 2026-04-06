@@ -1,6 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { asFiniteNumber } from "./parse.js";
+
 function isValidQuotaShape(value) {
   if (!value || typeof value.key !== "string") {
     return false;
@@ -69,10 +71,6 @@ function isSuccessCacheShape(value) {
   return isMultiQuotaSuccessCacheShape(value) || isLegacyPercentSuccessCacheShape(value);
 }
 
-function asFiniteNumber(value) {
-  return Number.isFinite(value) ? value : null;
-}
-
 function normalizeCache(parsed) {
   if (!parsed || typeof parsed !== "object") {
     return null;
@@ -81,9 +79,7 @@ function normalizeCache(parsed) {
   const result = isSuccessCacheShape(parsed.result) ? parsed.result : null;
   const savedAt = asFiniteNumber(parsed.savedAt);
   const lastAttemptAt = asFiniteNumber(parsed.lastAttemptAt) ?? savedAt;
-  const lastObservedTokensAtFetch = asFiniteNumber(parsed.lastObservedTokensAtFetch);
   const sessionId = typeof parsed.sessionId === "string" ? parsed.sessionId : "";
-  const skipNextTokenTrigger = parsed.skipNextTokenTrigger === true;
 
   if (result && savedAt === null) {
     return null;
@@ -93,12 +89,21 @@ function normalizeCache(parsed) {
     return null;
   }
 
+  const refreshCount =
+    typeof parsed.refreshCount === "number" && Number.isFinite(parsed.refreshCount)
+      ? Math.max(0, Math.floor(parsed.refreshCount))
+      : 0;
+  const tierIndex =
+    typeof parsed.tierIndex === "number" && Number.isFinite(parsed.tierIndex)
+      ? Math.max(0, Math.floor(parsed.tierIndex))
+      : 0;
+
   return {
     savedAt,
     lastAttemptAt,
-    lastObservedTokensAtFetch,
     sessionId,
-    skipNextTokenTrigger,
+    refreshCount,
+    tierIndex,
     result
   };
 }
@@ -109,10 +114,8 @@ async function writeCache(cacheFilePath, cache) {
       ...(Number.isFinite(cache.savedAt) ? { savedAt: cache.savedAt } : {}),
       ...(Number.isFinite(cache.lastAttemptAt) ? { lastAttemptAt: cache.lastAttemptAt } : {}),
       ...(cache.sessionId ? { sessionId: cache.sessionId } : {}),
-      ...(Number.isFinite(cache.lastObservedTokensAtFetch)
-        ? { lastObservedTokensAtFetch: cache.lastObservedTokensAtFetch }
-        : {}),
-      ...(cache.skipNextTokenTrigger ? { skipNextTokenTrigger: true } : {}),
+      refreshCount: cache.refreshCount ?? 0,
+      tierIndex: cache.tierIndex ?? 0,
       ...(cache.result ? { result: cache.result } : {})
     },
     null,
@@ -139,8 +142,8 @@ export async function writeSuccessCache(cacheFilePath, result, options = {}) {
     savedAt: now,
     lastAttemptAt: now,
     sessionId: options.sessionId || "",
-    lastObservedTokensAtFetch: asFiniteNumber(options.observedTokens),
-    skipNextTokenTrigger: false,
+    refreshCount: options.refreshCount ?? 0,
+    tierIndex: options.tierIndex ?? 0,
     result
   });
 }
@@ -152,21 +155,8 @@ export async function writeRateLimitedCache(cacheFilePath, cached, options = {})
     savedAt: cached?.savedAt ?? null,
     lastAttemptAt: now,
     sessionId: options.sessionId || cached?.sessionId || "",
-    lastObservedTokensAtFetch:
-      asFiniteNumber(options.observedTokens) ?? cached?.lastObservedTokensAtFetch ?? null,
-    skipNextTokenTrigger: true,
-    result: cached?.result ?? null
-  });
-}
-
-export async function writeSkippedTokenTriggerCache(cacheFilePath, cached, options = {}) {
-  await writeCache(cacheFilePath, {
-    savedAt: cached?.savedAt ?? null,
-    lastAttemptAt: cached?.lastAttemptAt ?? null,
-    sessionId: options.sessionId || cached?.sessionId || "",
-    lastObservedTokensAtFetch:
-      asFiniteNumber(options.observedTokens) ?? cached?.lastObservedTokensAtFetch ?? null,
-    skipNextTokenTrigger: false,
+    refreshCount: cached?.refreshCount ?? 0,
+    tierIndex: cached?.tierIndex ?? 0,
     result: cached?.result ?? null
   });
 }

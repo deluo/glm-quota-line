@@ -1,7 +1,7 @@
 <h1 align="center">glm-quota-line</h1>
 
 <p align="center">
-  一行命令安装、零依赖，在 Claude Code 状态栏实时显示 GLM 配额余额与重置时间。数据来自官方接口，精准非估算。
+  一行命令安装、零依赖，在 Claude Code 状态栏实时显示智谱（Zhipu）GLM Coding Plan 配额余额与重置时间。数据来自官方接口，精准非估算。
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
   <a href="./README.en.md">English</a>
 </p>
 
-`glm-quota-line` 读取 GLM 配额接口、缓存结果，并输出一行适合 Claude Code `statusLine.command` 的状态文本。通过 `SessionStart` hook 预刷新缓存，新会话不会显示旧配额。
+`glm-quota-line` 读取智谱（Zhipu）GLM Coding Plan 配额接口、缓存结果，并输出一行适合 Claude Code `statusLine.command` 的状态文本。通过 `SessionStart` hook 预刷新缓存，新会话不会显示旧配额。
 
 ## 功能
 
@@ -25,53 +25,58 @@
 - **零依赖** — 无运行时依赖，单一用途
 - **智能缓存** — 按会话、TTL 和 token 用量刷新；支持代理/网关手动覆盖鉴权
 
-## 安装
+## 快速开始
 
 ```bash
 npm install -g glm-quota-line
+glm-quota-line install
 ```
 
-推荐全局安装，`install` 会将稳定的可执行路径写入 `statusLine.command` 和 `SessionStart` hooks。`npx` 适合一次性试跑。
+两步完成，开箱即用。默认输出（`style=text`，`theme=ansi`，`palette=dark`）：
 
-升级：
+```text
+GLM Lite | 5h 91% | week 47% | reset 14:47
+```
+
+同时显示 5 小时配额（主要）和周配额（次要），并自动展示重置时间。
+
+升级版本：
 
 ```bash
 npm install -g glm-quota-line
 glm-quota-line check-update
 ```
 
-## 快速开始
+## 自定义样式
+
+所有样式配置均为可选，按需调整：
 
 ```bash
-glm-quota-line install
-glm-quota-line config set style bar
-glm-quota-line config set theme ansi
-glm-quota-line config set palette dark
+glm-quota-line config set style bar       # 布局: text / compact / bar
+glm-quota-line config set theme ansi      # 配色: plain / ansi
+glm-quota-line config set palette dark    # 色板: dark / mono（仅 theme=ansi 时生效）
 ```
 
-## 输出示例
+不同 style 效果：
 
 ```text
+# style=text（默认）
 GLM Lite | 5h 91% | week 47% | reset 14:47
 
+# style=compact
 GLM 5h 91% W 47% | 14:47
 
+# style=bar
 GLM Lite █░░░░░░░░░ 91% | W 47% | 14:47
 ```
 
-同时显示 5 小时配额（主要）和周配额（次要），并自动展示重置时间。
-
-## 样式与配色
+推荐搭配：
 
 | 使用场景   | 配置                                          |
 | ---------- | --------------------------------------------- |
 | 深色终端   | `style=bar`, `theme=ansi`, `palette=dark`     |
 | 浅色终端   | `style=compact`, `theme=ansi`, `palette=mono` |
 | 纯文本回退 | 任意 `style`，`theme=plain`                   |
-
-`style` 控制布局（`text` / `compact` / `bar`），`theme` 控制是否启用 ANSI 颜色，`palette` 仅在 `theme=ansi` 时生效。
-
-设置 `NO_COLOR=1` 可强制关闭颜色。
 
 ## 自定义鉴权
 

@@ -1,6 +1,6 @@
+import { DEFAULT_TIMEOUT_MS } from "../shared/constants.js";
 import { readPackageInfo } from "../shared/packageInfo.js";
 
-const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_REGISTRY_URL = "https://registry.npmjs.org";
 
 function parseVersion(version) {

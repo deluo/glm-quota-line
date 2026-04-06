@@ -1,6 +1,6 @@
 import { DEFAULT_BAR_WIDTH, STATUS_BAR_CHARACTERS } from "../../shared/constants.js";
 
-export function normalizeBarWidth(barWidth) {
+function normalizeBarWidth(barWidth) {
   if (!Number.isFinite(barWidth)) {
     return DEFAULT_BAR_WIDTH;
   }

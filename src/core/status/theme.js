@@ -17,15 +17,6 @@ const ANSI = {
   red: "\u001b[31m"
 };
 
-function shouldUseAnsi(theme, env = process.env) {
-  // NO_COLOR is the explicit opt-out and wins over local config.
-  if (env?.NO_COLOR) {
-    return false;
-  }
-
-  return normalizeTheme(theme || DEFAULT_THEME) === "ansi";
-}
-
 function applyCodes(text, codes) {
   if (!text || !codes.length) {
     return text;
@@ -76,9 +67,8 @@ function getMonoCodes(tone) {
 export function applyTheme(segments, options = {}) {
   const theme = normalizeTheme(options.theme || DEFAULT_THEME);
   const palette = normalizePalette(options.palette || DEFAULT_PALETTE);
-  const env = options.env || process.env;
 
-  if (!shouldUseAnsi(theme, env)) {
+  if (theme !== "ansi") {
     return segments.map((segment) => segment.text).join("");
   }
 

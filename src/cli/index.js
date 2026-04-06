@@ -67,14 +67,6 @@ Examples:
 Environment:
   ANTHROPIC_AUTH_TOKEN
   ANTHROPIC_BASE_URL
-  GLM_DISPLAY_MODE
-  GLM_STYLE
-  GLM_BAR_WIDTH
-  GLM_TIMEOUT_MS
-  GLM_CACHE_TTL_MS
-  GLM_THEME
-  GLM_PALETTE
-  NO_COLOR
 `);
 }
 
@@ -85,21 +77,6 @@ function getStoredDisplayOverrides(userConfig) {
     ...(isValidTheme(userConfig.theme) ? { theme: userConfig.theme } : {}),
     ...(isValidPalette(userConfig.palette) ? { palette: userConfig.palette } : {})
   };
-}
-
-function asNonNegativeNumber(value) {
-  return Number.isFinite(value) && value >= 0 ? value : null;
-}
-
-function getObservedTokens(statusLineInput) {
-  const inputTokens = asNonNegativeNumber(statusLineInput?.context_window?.total_input_tokens);
-  const outputTokens = asNonNegativeNumber(statusLineInput?.context_window?.total_output_tokens);
-
-  if (inputTokens === null && outputTokens === null) {
-    return null;
-  }
-
-  return (inputTokens ?? 0) + (outputTokens ?? 0);
 }
 
 export async function main() {
@@ -128,8 +105,7 @@ export async function main() {
       // Display config precedence is env defaults -> persisted config -> CLI flags.
       ...getStoredDisplayOverrides(userConfig),
       ...args,
-      sessionId: statusLineInput?.session_id || "",
-      observedTokens: getObservedTokens(statusLineInput)
+      sessionId: statusLineInput?.session_id || ""
     };
     const quotaStatus = await resolveQuotaStatus(config);
 

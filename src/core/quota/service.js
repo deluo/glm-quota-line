@@ -1,74 +1,74 @@
 import {
   readCache,
   writeRateLimitedCache,
-  writeSkippedTokenTriggerCache,
   writeSuccessCache
 } from "./cache.js";
 import { fetchQuota } from "./fetch.js";
 import { parseQuotaResponse } from "./parse.js";
-
-const TOKEN_REFRESH_THRESHOLD = 300_000;
-
-function normalizeObservedTokens(value) {
-  return Number.isFinite(value) && value >= 0 ? value : null;
-}
+import {
+  LOW_QUOTA_THRESHOLD,
+  REFRESH_TIERS
+} from "../../shared/constants.js";
 
 function getCachedStatus(cached) {
   return cached?.result ?? { kind: "unavailable" };
 }
 
-function shouldRefreshQuota(cached, cacheTtlMs, now, sessionId, observedTokens) {
+function getEffectiveTtlMs(tierIndex, leftPercent) {
+  if (Number.isFinite(leftPercent) && leftPercent < LOW_QUOTA_THRESHOLD) {
+    return REFRESH_TIERS[0].ttlMs;
+  }
+
+  const tier = REFRESH_TIERS[tierIndex];
+  return tier ? tier.ttlMs : REFRESH_TIERS[REFRESH_TIERS.length - 1].ttlMs;
+}
+
+function advanceTier(refreshCount, tierIndex) {
+  const nextCount = refreshCount + 1;
+  const tier = REFRESH_TIERS[tierIndex] ?? REFRESH_TIERS[REFRESH_TIERS.length - 1];
+
+  if (nextCount >= tier.maxRefreshes && tierIndex < REFRESH_TIERS.length - 1) {
+    return { refreshCount: 1, tierIndex: tierIndex + 1 };
+  }
+
+  return { refreshCount: nextCount, tierIndex };
+}
+
+function shouldRefreshQuota(cached, cacheTtlMs, now, sessionId) {
   if (!cached) {
-    return { kind: "fetch" };
+    return true;
   }
 
   if (sessionId && cached.sessionId !== sessionId) {
-    return { kind: "fetch" };
+    return true;
   }
 
   if (cached.lastAttemptAt === null || now - cached.lastAttemptAt >= cacheTtlMs) {
-    return { kind: "fetch" };
+    return true;
   }
 
-  if (observedTokens === null || cached.lastObservedTokensAtFetch === null) {
-    return { kind: "cache" };
-  }
-
-  if (observedTokens - cached.lastObservedTokensAtFetch < TOKEN_REFRESH_THRESHOLD) {
-    return { kind: "cache" };
-  }
-
-  if (cached.skipNextTokenTrigger) {
-    return { kind: "skip_token_trigger" };
-  }
-
-  return { kind: "fetch" };
+  return false;
 }
 
 export async function resolveQuotaStatus(config, options = {}) {
   const now = options.now ?? Date.now();
   const fetchImpl = options.fetchImpl;
   const sessionId = config.sessionId || "";
-  const observedTokens = normalizeObservedTokens(config.observedTokens);
 
   if (!config.authorization) {
     return { kind: "auth_error" };
   }
 
   const cached = await readCache(config.cacheFilePath);
-  const refreshDecision = options.forceRefresh
-    ? { kind: "fetch" }
-    : shouldRefreshQuota(cached, config.cacheTtlMs, now, sessionId, observedTokens);
+  const tierIndex = cached?.tierIndex ?? 0;
+  const leftPercent = cached?.result?.leftPercent;
+  const effectiveTtlMs = getEffectiveTtlMs(tierIndex, leftPercent);
 
-  if (refreshDecision.kind === "cache") {
-    return getCachedStatus(cached);
-  }
+  const shouldRefresh = options.forceRefresh
+    ? true
+    : shouldRefreshQuota(cached, effectiveTtlMs, now, sessionId);
 
-  if (refreshDecision.kind === "skip_token_trigger") {
-    await writeSkippedTokenTriggerCache(config.cacheFilePath, cached, {
-      sessionId,
-      observedTokens
-    });
+  if (!shouldRefresh) {
     return getCachedStatus(cached);
   }
 
@@ -76,10 +76,23 @@ export async function resolveQuotaStatus(config, options = {}) {
   const parsed = parseQuotaResponse(response);
 
   if (parsed.kind === "success") {
+    const isNewSession = Boolean(sessionId) && cached?.sessionId !== sessionId;
+    const isLowQuota = Number.isFinite(parsed.leftPercent) && parsed.leftPercent < LOW_QUOTA_THRESHOLD;
+
+    let nextTier;
+    if (isNewSession) {
+      nextTier = { refreshCount: 1, tierIndex: 0 };
+    } else if (isLowQuota) {
+      nextTier = { refreshCount: cached?.refreshCount ?? 0, tierIndex };
+    } else {
+      nextTier = advanceTier(cached?.refreshCount ?? 0, tierIndex);
+    }
+
     await writeSuccessCache(config.cacheFilePath, parsed, {
       now,
       sessionId,
-      observedTokens
+      refreshCount: nextTier.refreshCount,
+      tierIndex: nextTier.tierIndex
     });
     return parsed;
   }
@@ -91,8 +104,7 @@ export async function resolveQuotaStatus(config, options = {}) {
   if (parsed.kind === "rate_limited") {
     await writeRateLimitedCache(config.cacheFilePath, cached, {
       now,
-      sessionId,
-      observedTokens
+      sessionId
     });
     return getCachedStatus(cached);
   }

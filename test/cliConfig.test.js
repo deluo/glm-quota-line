@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -17,17 +16,9 @@ import {
   unsetToolConfigValue
 } from "../src/claude/settings.js";
 import { getPackageVersion } from "../src/shared/packageInfo.js";
+import { withTempDir } from "./helpers.js";
 
 const execFileAsync = promisify(execFile);
-
-async function withTempDir(run) {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "glm-quota-line-"));
-  try {
-    await run(dir);
-  } finally {
-    await fs.rm(dir, { recursive: true, force: true });
-  }
-}
 
 test("parseArgs accepts theme, palette, and version flags", () => {
   const options = parseArgs([
@@ -50,17 +41,6 @@ test("parseArgs accepts theme, palette, and version flags", () => {
     version: true,
     positionals: []
   });
-});
-
-test("loadConfig reads theme and palette environment variables", () => {
-  const config = loadConfig({
-    ANTHROPIC_AUTH_TOKEN: "official-token",
-    GLM_THEME: "ansi",
-    GLM_PALETTE: "mono"
-  });
-
-  assert.equal(config.theme, "ansi");
-  assert.equal(config.palette, "mono");
 });
 
 test("stored auth token and base url override Claude environment values", () => {

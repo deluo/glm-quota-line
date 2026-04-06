@@ -10,8 +10,9 @@ import {
   isValidTheme
 } from "../shared/constants.js";
 import { readJsonFile, writeJsonFile } from "../shared/jsonFile.js";
+import { normalizeOptionalString } from "../shared/config.js";
 
-export function getClaudeDir() {
+function getClaudeDir() {
   return path.join(os.homedir(), ".claude");
 }
 
@@ -21,15 +22,6 @@ export function getClaudeSettingsPath() {
 
 export function getToolConfigPath() {
   return path.join(getClaudeDir(), "glm-quota-line.json");
-}
-
-function normalizeOptionalString(value) {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-
-  const trimmed = value.trim();
-  return trimmed || undefined;
 }
 
 function redactSecret(value) {

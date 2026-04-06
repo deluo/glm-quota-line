@@ -8,10 +8,6 @@ import { buildBar } from "./bar.js";
 import { applyTheme } from "./theme.js";
 import { buildStatusViewModel } from "./viewModel.js";
 
-function getSeverityTone(model) {
-  return model.severity || "neutral";
-}
-
 function createErrorSegments(model) {
   const tone = model.kind === "auth_error" ? "danger" : "warn";
   return [
@@ -75,7 +71,7 @@ function appendResetSegments(segments, model) {
 }
 
 function createTextSegments(model, displayMode) {
-  const severityTone = getSeverityTone(model);
+  const severityTone = model.severity;
 
   return appendResetSegments(
     appendSecondarySegments(
@@ -91,7 +87,7 @@ function createTextSegments(model, displayMode) {
 }
 
 function createCompactSegments(model) {
-  const severityTone = getSeverityTone(model);
+  const severityTone = model.severity;
   let segments;
 
   if (model.secondaryQuota) {
@@ -126,7 +122,7 @@ function createBarSegments(model, barWidth) {
   }
 
   const bar = buildBar(model.primaryQuota.usedPercent, barWidth);
-  const severityTone = getSeverityTone(model);
+  const severityTone = model.severity;
   const segments = [
     { text: model.levelLabel, tone: "label" },
     { text: " ", tone: "plain" },
@@ -157,8 +153,7 @@ export function formatStatus(result, options = {}) {
   if (model.kind !== "success") {
     return applyTheme(createErrorSegments(model), {
       theme: normalizeTheme(options.theme),
-      palette: normalizePalette(options.palette),
-      env: options.env
+      palette: normalizePalette(options.palette)
     });
   }
 
@@ -175,7 +170,6 @@ export function formatStatus(result, options = {}) {
 
   return applyTheme(segments, {
     theme: normalizeTheme(options.theme),
-    palette: normalizePalette(options.palette),
-    env: options.env
+    palette: normalizePalette(options.palette)
   });
 }
