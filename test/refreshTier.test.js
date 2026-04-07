@@ -5,7 +5,11 @@ import path from "node:path";
 
 import { resolveQuotaStatus } from "../src/core/quota/service.js";
 import { createQuotaConfig, makeJsonResponse, withTempDir } from "./helpers.js";
-import { LOW_QUOTA_THRESHOLD, REFRESH_TIERS } from "../src/shared/constants.js";
+import {
+  RATE_LIMIT_RETRY_TTL_MS,
+  REFRESH_BANDS,
+  UNAVAILABLE_RETRY_TTL_MS
+} from "../src/shared/constants.js";
 
 const SUCCESS_RESULT = Object.freeze({
   kind: "success",
@@ -36,303 +40,503 @@ function successBody(leftPercent = 91) {
   };
 }
 
-function getTtl(tierIndex, leftPercent) {
-  if (Number.isFinite(leftPercent) && leftPercent < LOW_QUOTA_THRESHOLD) {
-    return REFRESH_TIERS[0].ttlMs;
+function getTtl(leftPercent) {
+  if (!Number.isFinite(leftPercent)) {
+    return REFRESH_BANDS[1].ttlMs;
   }
-  return REFRESH_TIERS[tierIndex]?.ttlMs ?? REFRESH_TIERS[REFRESH_TIERS.length - 1].ttlMs;
+  const matchedBand = REFRESH_BANDS.find((band) => leftPercent >= band.minLeftPercent);
+  return matchedBand ? matchedBand.ttlMs : REFRESH_BANDS[REFRESH_BANDS.length - 1].ttlMs;
 }
 
 function readCacheAt(cacheFilePath) {
-  return fs.readFile(cacheFilePath, "utf8").then((r) => JSON.parse(r));
+  return fs.readFile(cacheFilePath, "utf8").then((raw) => JSON.parse(raw));
 }
 
-/**
- * Perform one successful refresh at exactly the TTL boundary.
- * Returns the updated cache.
- */
-async function doRefresh(cacheFilePath, leftPercent = 91, sessionId = "") {
-  let cached;
-  try {
-    cached = await readCacheAt(cacheFilePath);
-  } catch {
-    cached = null;
-  }
-  const ttl = getTtl(cached?.tierIndex ?? 0, cached?.result?.leftPercent);
-  const now = (cached?.lastAttemptAt ?? 0) + ttl;
-  await resolveQuotaStatus(
-    { ...createQuotaConfig(cacheFilePath), sessionId },
-    { now, fetchImpl: async () => makeJsonResponse(successBody(leftPercent)) }
+async function seedCache(
+  cacheFilePath,
+  { leftPercent = 91, sessionId = "", lastAttemptAt = 1000, lastFailureKind = null } = {}
+) {
+  await fs.writeFile(
+    cacheFilePath,
+    JSON.stringify(
+      {
+        savedAt: lastAttemptAt,
+        lastAttemptAt,
+        sessionId,
+        ...(lastFailureKind ? { lastFailureKind } : {}),
+        result: { ...SUCCESS_RESULT, leftPercent, usedPercent: 100 - leftPercent }
+      },
+      null,
+      2
+    )
   );
-  return readCacheAt(cacheFilePath);
 }
 
-/**
- * Seed the cache at a specific tier / count state so tests skip the warm-up loop.
- */
-async function seedCache(cacheFilePath, { tierIndex, refreshCount, leftPercent = 91, sessionId = "", lastAttemptAt = 1000 }) {
-  await fs.writeFile(cacheFilePath, JSON.stringify({
-    savedAt: lastAttemptAt,
-    lastAttemptAt,
-    sessionId,
-    refreshCount,
-    tierIndex,
-    result: { ...SUCCESS_RESULT, leftPercent, usedPercent: 100 - leftPercent }
-  }, null, 2));
-}
-
-// ---------------------------------------------------------------------------
-// Tier progression
-// ---------------------------------------------------------------------------
-
-test("first fetch starts at tier 0 (3-minute TTL)", async () => {
+test("first fetch writes a success cache snapshot", async () => {
   await withTempDir(async (dir) => {
     const cacheFilePath = path.join(dir, "cache.json");
 
-    const cached = await doRefresh(cacheFilePath, 91);
-    assert.equal(cached.refreshCount, 1);
-    assert.equal(cached.tierIndex, 0);
-
-    // Within tier 0 TTL → no refresh
-    let calls = 0;
-    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
-      now: cached.lastAttemptAt + REFRESH_TIERS[0].ttlMs - 1,
-      fetchImpl: async () => { calls++; return makeJsonResponse(successBody()); }
+    const result = await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: 1000,
+      fetchImpl: async () => makeJsonResponse(successBody(91))
     });
-    assert.equal(calls, 0);
-
-    // At tier 0 TTL → refresh
-    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
-      now: cached.lastAttemptAt + REFRESH_TIERS[0].ttlMs,
-      fetchImpl: async () => { calls++; return makeJsonResponse(successBody()); }
-    });
-    assert.equal(calls, 1);
-  });
-});
-
-test("5 refreshes at tier 0 advance to tier 1 (5-minute TTL)", async () => {
-  await withTempDir(async (dir) => {
-    const cacheFilePath = path.join(dir, "cache.json");
-
-    // Seed at tier 0, count=4 — one more refresh triggers the advance
-    await seedCache(cacheFilePath, { tierIndex: 0, refreshCount: 4 });
-
-    const cached = await doRefresh(cacheFilePath);
-    assert.equal(cached.tierIndex, 1);
-    assert.equal(cached.refreshCount, 1);
-
-    // Tier 0 TTL should NOT trigger at tier 1
-    let calls = 0;
-    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
-      now: cached.lastAttemptAt + REFRESH_TIERS[0].ttlMs,
-      fetchImpl: async () => { calls++; return makeJsonResponse(successBody()); }
-    });
-    assert.equal(calls, 0);
-
-    // Tier 1 TTL SHOULD trigger
-    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
-      now: cached.lastAttemptAt + REFRESH_TIERS[1].ttlMs,
-      fetchImpl: async () => { calls++; return makeJsonResponse(successBody()); }
-    });
-    assert.equal(calls, 1);
-  });
-});
-
-test("5 refreshes at tier 1 advance to tier 2 (10-minute TTL)", async () => {
-  await withTempDir(async (dir) => {
-    const cacheFilePath = path.join(dir, "cache.json");
-
-    // Seed at tier 1, count=4 — one more triggers advance to tier 2
-    await seedCache(cacheFilePath, { tierIndex: 1, refreshCount: 4 });
-
-    const cached = await doRefresh(cacheFilePath);
-    assert.equal(cached.tierIndex, 2);
-    assert.equal(cached.refreshCount, 1);
-
-    // Tier 1 TTL should NOT trigger at tier 2
-    let calls = 0;
-    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
-      now: cached.lastAttemptAt + REFRESH_TIERS[1].ttlMs,
-      fetchImpl: async () => { calls++; return makeJsonResponse(successBody()); }
-    });
-    assert.equal(calls, 0);
-
-    // Tier 2 TTL SHOULD trigger
-    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
-      now: cached.lastAttemptAt + REFRESH_TIERS[2].ttlMs,
-      fetchImpl: async () => { calls++; return makeJsonResponse(successBody()); }
-    });
-    assert.equal(calls, 1);
-  });
-});
-
-test("tier 2 stays at 10 minutes indefinitely", async () => {
-  await withTempDir(async (dir) => {
-    const cacheFilePath = path.join(dir, "cache.json");
-    await seedCache(cacheFilePath, { tierIndex: 2, refreshCount: 10 });
-
-    for (let i = 0; i < 20; i++) {
-      await doRefresh(cacheFilePath);
-    }
 
     const cached = await readCacheAt(cacheFilePath);
-    assert.equal(cached.tierIndex, 2);
+    assert.equal(result.leftPercent, 91);
+    assert.equal(cached.result.leftPercent, 91);
+    assert.equal(cached.lastAttemptAt, 1000);
+    assert.equal("lastFailureKind" in cached, false);
   });
 });
 
-// ---------------------------------------------------------------------------
-// Low-quota override
-// ---------------------------------------------------------------------------
-
-test("low quota forces tier 0 TTL even at tier 2", async () => {
+test("high quota refreshes after 2 minutes", async () => {
   await withTempDir(async (dir) => {
     const cacheFilePath = path.join(dir, "cache.json");
-
-    // At tier 2 with low quota
-    await seedCache(cacheFilePath, { tierIndex: 2, refreshCount: 5, leftPercent: 20 });
-
-    const cached = await readCacheAt(cacheFilePath);
-    const tier0Ttl = REFRESH_TIERS[0].ttlMs;
+    await seedCache(cacheFilePath, { leftPercent: 91 });
+    const ttl = getTtl(91);
 
     let calls = 0;
-    // Tier 0 TTL should trigger refresh (low quota override)
     await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
-      now: cached.lastAttemptAt + tier0Ttl,
-      fetchImpl: async () => { calls++; return makeJsonResponse(successBody(15)); }
+      now: 1000 + ttl - 1,
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(90));
+      }
+    });
+    assert.equal(calls, 0);
+
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: 1000 + ttl,
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(90));
+      }
     });
     assert.equal(calls, 1);
   });
 });
 
-test("low quota refreshes do not advance tier", async () => {
+test("middle quota refreshes after 5 minutes", async () => {
   await withTempDir(async (dir) => {
     const cacheFilePath = path.join(dir, "cache.json");
+    await seedCache(cacheFilePath, { leftPercent: 50 });
+    const ttl = getTtl(50);
 
-    // At tier 1, count=3, with high quota
-    await seedCache(cacheFilePath, { tierIndex: 1, refreshCount: 3 });
+    let calls = 0;
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: 1000 + ttl - 1,
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(49));
+      }
+    });
+    assert.equal(calls, 0);
 
-    // Multiple low-quota refreshes — tier should freeze
-    let cached;
-    for (let i = 0; i < 5; i++) {
-      cached = await doRefresh(cacheFilePath, 10);
-    }
-
-    assert.equal(cached.tierIndex, 1);
-    assert.equal(cached.refreshCount, 3);
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: 1000 + ttl,
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(49));
+      }
+    });
+    assert.equal(calls, 1);
   });
 });
 
-test("tier resumes from where it was after quota recovers", async () => {
+test("low quota refreshes after 2 minutes", async () => {
   await withTempDir(async (dir) => {
     const cacheFilePath = path.join(dir, "cache.json");
+    await seedCache(cacheFilePath, { leftPercent: 20 });
+    const ttl = getTtl(20);
 
-    // At tier 1, count=3, low quota
-    await seedCache(cacheFilePath, { tierIndex: 1, refreshCount: 3, leftPercent: 10 });
+    let calls = 0;
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: 1000 + ttl - 1,
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(19));
+      }
+    });
+    assert.equal(calls, 0);
 
-    // Quota recovers
-    const cached = await doRefresh(cacheFilePath, 85);
-    assert.equal(cached.tierIndex, 1);
-    assert.equal(cached.refreshCount, 4); // 3 + 1
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: 1000 + ttl,
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(19));
+      }
+    });
+    assert.equal(calls, 1);
   });
 });
 
-// ---------------------------------------------------------------------------
-// Session reset
-// ---------------------------------------------------------------------------
-
-test("new session resets tier to 0", async () => {
+test("new session bypasses a fresh cache snapshot", async () => {
   await withTempDir(async (dir) => {
     const cacheFilePath = path.join(dir, "cache.json");
+    await seedCache(cacheFilePath, { leftPercent: 91, sessionId: "session-a" });
 
-    // At tier 2 in session A
-    await seedCache(cacheFilePath, { tierIndex: 2, refreshCount: 5, sessionId: "session-a" });
-
-    // New session B forces a refresh
     let calls = 0;
     await resolveQuotaStatus(
       { ...createQuotaConfig(cacheFilePath), sessionId: "session-b" },
       {
-        now: 1000 + REFRESH_TIERS[0].ttlMs,
-        fetchImpl: async () => { calls++; return makeJsonResponse(successBody(85)); }
+        now: 1000 + 1,
+        fetchImpl: async () => {
+          calls += 1;
+          return makeJsonResponse(successBody(85));
+        }
       }
     );
 
     const cached = await readCacheAt(cacheFilePath);
     assert.equal(calls, 1);
-    assert.equal(cached.tierIndex, 0);
-    assert.equal(cached.refreshCount, 1);
+    assert.equal(cached.result.leftPercent, 85);
     assert.equal(cached.sessionId, "session-b");
   });
 });
 
-test("empty sessionId does not trigger session reset", async () => {
+test("empty sessionId does not bypass a fresh cache snapshot", async () => {
   await withTempDir(async (dir) => {
     const cacheFilePath = path.join(dir, "cache.json");
+    await seedCache(cacheFilePath, { leftPercent: 91, sessionId: "session-a" });
 
-    // At tier 1, count=3 in session A
-    await seedCache(cacheFilePath, { tierIndex: 1, refreshCount: 3, sessionId: "session-a" });
-
-    // Call with empty sessionId
-    const cached = await doRefresh(cacheFilePath, 85, "");
-
-    assert.equal(cached.tierIndex, 1);
-    assert.equal(cached.refreshCount, 4); // 3 + 1, same session logic
+    let calls = 0;
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: 1000 + 1,
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(85));
+      }
+    });
+    assert.equal(calls, 0);
   });
 });
 
-// ---------------------------------------------------------------------------
-// Edge cases
-// ---------------------------------------------------------------------------
-
-test("old cache without tier fields defaults to tier 0", async () => {
+test("old cache without failure metadata still uses quota-based ttl", async () => {
   await withTempDir(async (dir) => {
     const cacheFilePath = path.join(dir, "cache.json");
-    await fs.writeFile(cacheFilePath, JSON.stringify({
-      savedAt: 1000,
-      lastAttemptAt: 1000,
-      sessionId: "",
-      result: { ...SUCCESS_RESULT }
-    }));
+    await fs.writeFile(
+      cacheFilePath,
+      JSON.stringify(
+        {
+          savedAt: 1000,
+          lastAttemptAt: 1000,
+          sessionId: "",
+          result: { ...SUCCESS_RESULT, leftPercent: 50, usedPercent: 50 }
+        },
+        null,
+        2
+      )
+    );
 
     let calls = 0;
-
-    // Within tier 0 TTL → no refresh
     await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
-      now: 1000 + REFRESH_TIERS[0].ttlMs - 1,
-      fetchImpl: async () => { calls++; return makeJsonResponse(successBody()); }
+      now: 1000 + getTtl(50) - 1,
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(49));
+      }
     });
     assert.equal(calls, 0);
 
-    // Past tier 0 TTL → refresh
     await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
-      now: 1000 + REFRESH_TIERS[0].ttlMs,
-      fetchImpl: async () => { calls++; return makeJsonResponse(successBody()); }
+      now: 1000 + getTtl(50),
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(49));
+      }
     });
     assert.equal(calls, 1);
-
-    const cached = await readCacheAt(cacheFilePath);
-    assert.equal(cached.refreshCount, 1);
-    assert.equal(cached.tierIndex, 0);
   });
 });
 
-test("rate limited response does not advance tier", async () => {
+test("rate limited response keeps stale quota and retries after 3 minutes", async () => {
   await withTempDir(async (dir) => {
     const cacheFilePath = path.join(dir, "cache.json");
+    await seedCache(cacheFilePath, { leftPercent: 50 });
 
-    // At tier 0, count=1
-    await seedCache(cacheFilePath, { tierIndex: 0, refreshCount: 1 });
-
-    // Fetch that returns rate limited
-    const cached = await readCacheAt(cacheFilePath);
     await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
-      now: cached.lastAttemptAt + REFRESH_TIERS[0].ttlMs,
+      now: 1000 + getTtl(50),
       fetchImpl: async () => makeJsonResponse({ code: 429, msg: "too many requests", success: false }, 429)
     });
 
-    const updated = await readCacheAt(cacheFilePath);
-    assert.equal(updated.refreshCount, 1);
-    assert.equal(updated.tierIndex, 0);
-    assert.equal(updated.result.leftPercent, 91); // old result preserved
+    const failedCache = await readCacheAt(cacheFilePath);
+    assert.equal(failedCache.result.leftPercent, 50);
+    assert.equal(failedCache.lastFailureKind, "rate_limited");
+
+    let calls = 0;
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: failedCache.lastAttemptAt + RATE_LIMIT_RETRY_TTL_MS - 1,
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(49));
+      }
+    });
+    assert.equal(calls, 0);
+
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: failedCache.lastAttemptAt + RATE_LIMIT_RETRY_TTL_MS,
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(49));
+      }
+    });
+    assert.equal(calls, 1);
+  });
+});
+
+test("band boundaries produce correct TTLs", () => {
+  assert.equal(getTtl(100), REFRESH_BANDS[0].ttlMs);  // 2 min
+  assert.equal(getTtl(80), REFRESH_BANDS[0].ttlMs);    // 2 min (boundary inclusive)
+  assert.equal(getTtl(79), REFRESH_BANDS[1].ttlMs);    // 5 min
+  assert.equal(getTtl(30), REFRESH_BANDS[1].ttlMs);    // 5 min (boundary inclusive)
+  assert.equal(getTtl(29), REFRESH_BANDS[2].ttlMs);    // 2 min
+  assert.equal(getTtl(0), REFRESH_BANDS[2].ttlMs);     // 2 min (boundary inclusive)
+  assert.equal(getTtl(-1), REFRESH_BANDS[2].ttlMs);    // 2 min (below zero falls to last band)
+  assert.equal(getTtl(NaN), REFRESH_BANDS[1].ttlMs);   // 5 min (non-finite default)
+  assert.equal(getTtl(Infinity), REFRESH_BANDS[1].ttlMs); // 5 min (non-finite default)
+});
+
+test("quota drop from high to critical transitions TTL correctly", async () => {
+  await withTempDir(async (dir) => {
+    const cacheFilePath = path.join(dir, "cache.json");
+    await seedCache(cacheFilePath, { leftPercent: 91, lastAttemptAt: 0 });
+
+    // High quota (91) → 2-min TTL
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: getTtl(91),
+      fetchImpl: async () => makeJsonResponse(successBody(50))
+    });
+
+    // Medium quota (50) → 5-min TTL
+    let calls = 0;
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: getTtl(91) + getTtl(50) - 1,
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(20));
+      }
+    });
+    assert.equal(calls, 0);
+
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: getTtl(91) + getTtl(50),
+      fetchImpl: async () => makeJsonResponse(successBody(20))
+    });
+
+    // Low quota (20) → 2-min TTL
+    const cached = await readCacheAt(cacheFilePath);
+    assert.equal(cached.result.leftPercent, 20);
+
+    calls = 0;
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: cached.lastAttemptAt + getTtl(20) - 1,
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(5));
+      }
+    });
+    assert.equal(calls, 0);
+
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: cached.lastAttemptAt + getTtl(20),
+      fetchImpl: async () => makeJsonResponse(successBody(5))
+    });
+
+    // Low quota (5) → 2-min TTL
+    const cached2 = await readCacheAt(cacheFilePath);
+    assert.equal(cached2.result.leftPercent, 5);
+
+    calls = 0;
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: cached2.lastAttemptAt + getTtl(5) - 1,
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(3));
+      }
+    });
+    assert.equal(calls, 0);
+
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: cached2.lastAttemptAt + getTtl(5),
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(3));
+      }
+    });
+    assert.equal(calls, 1);
+  });
+});
+
+test("success after rate_limited clears failure state and uses quota-based TTL", async () => {
+  await withTempDir(async (dir) => {
+    const cacheFilePath = path.join(dir, "cache.json");
+    await seedCache(cacheFilePath, { leftPercent: 50 });
+
+    // Trigger rate_limited
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: 1000 + getTtl(50),
+      fetchImpl: async () => makeJsonResponse({ code: 429, msg: "too many requests", success: false }, 429)
+    });
+
+    const failedCache = await readCacheAt(cacheFilePath);
+    assert.equal(failedCache.lastFailureKind, "rate_limited");
+
+    // After retry TTL, succeed
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: failedCache.lastAttemptAt + RATE_LIMIT_RETRY_TTL_MS,
+      fetchImpl: async () => makeJsonResponse(successBody(85))
+    });
+
+    const recoveredCache = await readCacheAt(cacheFilePath);
+    assert.equal(recoveredCache.result.leftPercent, 85);
+    assert.equal("lastFailureKind" in recoveredCache, false);
+
+    // Next refresh uses quota-based TTL (85 → 2 min), not rate-limited retry (3 min)
+    let calls = 0;
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: recoveredCache.lastAttemptAt + getTtl(85) - 1,
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(80));
+      }
+    });
+    assert.equal(calls, 0);
+
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: recoveredCache.lastAttemptAt + getTtl(85),
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(80));
+      }
+    });
+    assert.equal(calls, 1);
+  });
+});
+
+test("failure type changes from unavailable to rate_limited and uses correct retry TTL", async () => {
+  await withTempDir(async (dir) => {
+    const cacheFilePath = path.join(dir, "cache.json");
+    await seedCache(cacheFilePath, { leftPercent: 50 });
+
+    // First: unavailable (malformed response)
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: 1000 + getTtl(50),
+      fetchImpl: async () => ({ status: 200, async text() { return "bad"; } })
+    });
+
+    const cache1 = await readCacheAt(cacheFilePath);
+    assert.equal(cache1.lastFailureKind, "unavailable");
+
+    // Retries after unavailable TTL
+    let calls = 0;
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: cache1.lastAttemptAt + UNAVAILABLE_RETRY_TTL_MS,
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse({ code: 429, msg: "too many requests", success: false }, 429);
+      }
+    });
+    assert.equal(calls, 1);
+
+    const cache2 = await readCacheAt(cacheFilePath);
+    assert.equal(cache2.lastFailureKind, "rate_limited");
+
+    // Now uses rate_limited retry TTL (3 min), not unavailable (2 min)
+    calls = 0;
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: cache2.lastAttemptAt + UNAVAILABLE_RETRY_TTL_MS - 1,
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(49));
+      }
+    });
+    assert.equal(calls, 0);
+
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: cache2.lastAttemptAt + RATE_LIMIT_RETRY_TTL_MS,
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(49));
+      }
+    });
+    assert.equal(calls, 1);
+  });
+});
+
+test("first-run rate limited writes failure cache with no result", async () => {
+  await withTempDir(async (dir) => {
+    const cacheFilePath = path.join(dir, "cache.json");
+
+    const result = await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: 1000,
+      fetchImpl: async () => makeJsonResponse({ code: 429, msg: "too many requests", success: false }, 429)
+    });
+
+    assert.equal(result.kind, "unavailable");
+
+    const cached = await readCacheAt(cacheFilePath);
+    assert.equal(cached.lastFailureKind, "rate_limited");
+    assert.equal(cached.result, undefined);
+
+    // Should retry after rate_limit TTL
+    let calls = 0;
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: cached.lastAttemptAt + RATE_LIMIT_RETRY_TTL_MS - 1,
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(91));
+      }
+    });
+    assert.equal(calls, 0);
+
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: cached.lastAttemptAt + RATE_LIMIT_RETRY_TTL_MS,
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(91));
+      }
+    });
+    assert.equal(calls, 1);
+  });
+});
+
+test("unavailable response keeps stale quota and retries after 2 minutes", async () => {
+  await withTempDir(async (dir) => {
+    const cacheFilePath = path.join(dir, "cache.json");
+    await seedCache(cacheFilePath, { leftPercent: 50 });
+
+    const result = await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: 1000 + getTtl(50),
+      fetchImpl: async () => ({
+        status: 200,
+        async text() {
+          return "not-json";
+        }
+      })
+    });
+
+    const failedCache = await readCacheAt(cacheFilePath);
+    assert.equal(result.leftPercent, 50);
+    assert.equal(failedCache.result.leftPercent, 50);
+    assert.equal(failedCache.lastFailureKind, "unavailable");
+
+    let calls = 0;
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: failedCache.lastAttemptAt + UNAVAILABLE_RETRY_TTL_MS - 1,
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(49));
+      }
+    });
+    assert.equal(calls, 0);
+
+    await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: failedCache.lastAttemptAt + UNAVAILABLE_RETRY_TTL_MS,
+      fetchImpl: async () => {
+        calls += 1;
+        return makeJsonResponse(successBody(49));
+      }
+    });
+    assert.equal(calls, 1);
   });
 });

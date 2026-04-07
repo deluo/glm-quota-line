@@ -1,3 +1,5 @@
+import { LOW_QUOTA_THRESHOLD } from "../../shared/constants.js";
+
 function padTwoDigits(value) {
   return String(value).padStart(2, "0");
 }
@@ -37,7 +39,7 @@ function getSeverity(leftPercent) {
     return "good";
   }
 
-  if (leftPercent >= 25) {
+  if (leftPercent >= LOW_QUOTA_THRESHOLD) {
     return "warn";
   }
 

@@ -1,37 +1,39 @@
 import {
   readCache,
-  writeRateLimitedCache,
+  writeFailureCache,
   writeSuccessCache
 } from "./cache.js";
 import { fetchQuota } from "./fetch.js";
 import { parseQuotaResponse } from "./parse.js";
 import {
-  LOW_QUOTA_THRESHOLD,
-  REFRESH_TIERS
+  RATE_LIMIT_RETRY_TTL_MS,
+  REFRESH_BANDS,
+  UNAVAILABLE_RETRY_TTL_MS
 } from "../../shared/constants.js";
 
 function getCachedStatus(cached) {
   return cached?.result ?? { kind: "unavailable" };
 }
 
-function getEffectiveTtlMs(tierIndex, leftPercent) {
-  if (Number.isFinite(leftPercent) && leftPercent < LOW_QUOTA_THRESHOLD) {
-    return REFRESH_TIERS[0].ttlMs;
+function getRefreshTtlMs(leftPercent) {
+  if (!Number.isFinite(leftPercent)) {
+    return REFRESH_BANDS[1].ttlMs;
   }
 
-  const tier = REFRESH_TIERS[tierIndex];
-  return tier ? tier.ttlMs : REFRESH_TIERS[REFRESH_TIERS.length - 1].ttlMs;
+  const matchedBand = REFRESH_BANDS.find((band) => leftPercent >= band.minLeftPercent);
+  return matchedBand ? matchedBand.ttlMs : REFRESH_BANDS[REFRESH_BANDS.length - 1].ttlMs;
 }
 
-function advanceTier(refreshCount, tierIndex) {
-  const nextCount = refreshCount + 1;
-  const tier = REFRESH_TIERS[tierIndex] ?? REFRESH_TIERS[REFRESH_TIERS.length - 1];
-
-  if (nextCount >= tier.maxRefreshes && tierIndex < REFRESH_TIERS.length - 1) {
-    return { refreshCount: 1, tierIndex: tierIndex + 1 };
+function getEffectiveTtlMs(cached) {
+  if (cached?.lastFailureKind === "rate_limited") {
+    return RATE_LIMIT_RETRY_TTL_MS;
   }
 
-  return { refreshCount: nextCount, tierIndex };
+  if (cached?.lastFailureKind === "unavailable") {
+    return UNAVAILABLE_RETRY_TTL_MS;
+  }
+
+  return getRefreshTtlMs(cached?.result?.leftPercent);
 }
 
 function shouldRefreshQuota(cached, cacheTtlMs, now, sessionId) {
@@ -60,9 +62,7 @@ export async function resolveQuotaStatus(config, options = {}) {
   }
 
   const cached = await readCache(config.cacheFilePath);
-  const tierIndex = cached?.tierIndex ?? 0;
-  const leftPercent = cached?.result?.leftPercent;
-  const effectiveTtlMs = getEffectiveTtlMs(tierIndex, leftPercent);
+  const effectiveTtlMs = getEffectiveTtlMs(cached);
 
   const shouldRefresh = options.forceRefresh
     ? true
@@ -76,23 +76,9 @@ export async function resolveQuotaStatus(config, options = {}) {
   const parsed = parseQuotaResponse(response);
 
   if (parsed.kind === "success") {
-    const isNewSession = Boolean(sessionId) && cached?.sessionId !== sessionId;
-    const isLowQuota = Number.isFinite(parsed.leftPercent) && parsed.leftPercent < LOW_QUOTA_THRESHOLD;
-
-    let nextTier;
-    if (isNewSession) {
-      nextTier = { refreshCount: 1, tierIndex: 0 };
-    } else if (isLowQuota) {
-      nextTier = { refreshCount: cached?.refreshCount ?? 0, tierIndex };
-    } else {
-      nextTier = advanceTier(cached?.refreshCount ?? 0, tierIndex);
-    }
-
     await writeSuccessCache(config.cacheFilePath, parsed, {
       now,
-      sessionId,
-      refreshCount: nextTier.refreshCount,
-      tierIndex: nextTier.tierIndex
+      sessionId
     });
     return parsed;
   }
@@ -102,16 +88,27 @@ export async function resolveQuotaStatus(config, options = {}) {
   }
 
   if (parsed.kind === "rate_limited") {
-    await writeRateLimitedCache(config.cacheFilePath, cached, {
+    await writeFailureCache(config.cacheFilePath, cached, {
       now,
-      sessionId
+      sessionId,
+      failureKind: "rate_limited"
     });
     return getCachedStatus(cached);
   }
 
   if (cached?.result) {
+    await writeFailureCache(config.cacheFilePath, cached, {
+      now,
+      sessionId,
+      failureKind: "unavailable"
+    });
     return cached.result;
   }
 
+  await writeFailureCache(config.cacheFilePath, cached, {
+    now,
+    sessionId,
+    failureKind: "unavailable"
+  });
   return parsed;
 }

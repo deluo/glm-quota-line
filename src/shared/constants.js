@@ -4,13 +4,15 @@ export const DEFAULT_INTL_BASE_URL = "https://api.z.ai";
 export const DEFAULT_TIMEOUT_MS = 5000;
 export const DEFAULT_CACHE_TTL_MS = 600_000;
 
-export const REFRESH_TIERS = [
-  { ttlMs: 180_000, maxRefreshes: 5 },   // 3 min × 5
-  { ttlMs: 300_000, maxRefreshes: 5 },   // 5 min × 5
-  { ttlMs: 600_000, maxRefreshes: Infinity } // 10 min (cap)
+export const REFRESH_BANDS = [
+  { minLeftPercent: 80, ttlMs: 120_000 }, // 2 min
+  { minLeftPercent: 30, ttlMs: 300_000 }, // 5 min
+  { minLeftPercent: 0, ttlMs: 120_000 } // 2 min
 ];
 
 export const LOW_QUOTA_THRESHOLD = 30;
+export const RATE_LIMIT_RETRY_TTL_MS = 180_000;
+export const UNAVAILABLE_RETRY_TTL_MS = 120_000;
 export const DEFAULT_DISPLAY_MODE = "left";
 export const DEFAULT_STYLE = "text";
 export const DEFAULT_BAR_WIDTH = 10;

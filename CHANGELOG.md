@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.0
+
+- Replaced progressive tier-based backoff with diamond-shaped refresh strategy: high quota (80–100%) refreshes every 2 min, medium (30–79%) every 5 min, low (0–29%) every 2 min — frequent updates when usage is active or quota is near exhaustion, relaxed in between
+- Added failure-type-aware retry TTLs: rate-limited (429) retries after 3 min, unavailable retries after 2 min, instead of reusing the quota-based TTL
+- Removed `refreshCount`/`tierIndex` cache fields and `advanceTier()` — cache format is now simpler, and TTL is derived purely from quota percentage
+- Aligned severity threshold (danger/warn boundary) from hardcoded 25% to `LOW_QUOTA_THRESHOLD` (30%), consistent with the refresh band boundary
+- Unknown CLI commands and invalid config subcommands now print an error and exit with code 1 instead of silently showing quota status
+
 ## 0.8.0
 
 - Added progressive refresh backoff: new sessions start at 3-minute intervals, advance to 5 minutes after 5 refreshes, and cap at 10 minutes after 5 more — giving new users fast feedback while reducing API pressure in long sessions

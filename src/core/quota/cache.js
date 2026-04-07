@@ -80,6 +80,10 @@ function normalizeCache(parsed) {
   const savedAt = asFiniteNumber(parsed.savedAt);
   const lastAttemptAt = asFiniteNumber(parsed.lastAttemptAt) ?? savedAt;
   const sessionId = typeof parsed.sessionId === "string" ? parsed.sessionId : "";
+  const lastFailureKind =
+    parsed.lastFailureKind === "rate_limited" || parsed.lastFailureKind === "unavailable"
+      ? parsed.lastFailureKind
+      : null;
 
   if (result && savedAt === null) {
     return null;
@@ -89,21 +93,11 @@ function normalizeCache(parsed) {
     return null;
   }
 
-  const refreshCount =
-    typeof parsed.refreshCount === "number" && Number.isFinite(parsed.refreshCount)
-      ? Math.max(0, Math.floor(parsed.refreshCount))
-      : 0;
-  const tierIndex =
-    typeof parsed.tierIndex === "number" && Number.isFinite(parsed.tierIndex)
-      ? Math.max(0, Math.floor(parsed.tierIndex))
-      : 0;
-
   return {
     savedAt,
     lastAttemptAt,
     sessionId,
-    refreshCount,
-    tierIndex,
+    lastFailureKind,
     result
   };
 }
@@ -114,8 +108,7 @@ async function writeCache(cacheFilePath, cache) {
       ...(Number.isFinite(cache.savedAt) ? { savedAt: cache.savedAt } : {}),
       ...(Number.isFinite(cache.lastAttemptAt) ? { lastAttemptAt: cache.lastAttemptAt } : {}),
       ...(cache.sessionId ? { sessionId: cache.sessionId } : {}),
-      refreshCount: cache.refreshCount ?? 0,
-      tierIndex: cache.tierIndex ?? 0,
+      ...(cache.lastFailureKind ? { lastFailureKind: cache.lastFailureKind } : {}),
       ...(cache.result ? { result: cache.result } : {})
     },
     null,
@@ -142,21 +135,19 @@ export async function writeSuccessCache(cacheFilePath, result, options = {}) {
     savedAt: now,
     lastAttemptAt: now,
     sessionId: options.sessionId || "",
-    refreshCount: options.refreshCount ?? 0,
-    tierIndex: options.tierIndex ?? 0,
+    lastFailureKind: null,
     result
   });
 }
 
-export async function writeRateLimitedCache(cacheFilePath, cached, options = {}) {
+export async function writeFailureCache(cacheFilePath, cached, options = {}) {
   const now = options.now ?? Date.now();
 
   await writeCache(cacheFilePath, {
     savedAt: cached?.savedAt ?? null,
     lastAttemptAt: now,
     sessionId: options.sessionId || cached?.sessionId || "",
-    refreshCount: cached?.refreshCount ?? 0,
-    tierIndex: cached?.tierIndex ?? 0,
+    lastFailureKind: options.failureKind || "unavailable",
     result: cached?.result ?? null
   });
 }

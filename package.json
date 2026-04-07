@@ -1,6 +1,6 @@
 {
   "name": "glm-quota-line",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Zhipu GLM Coding Plan quota monitor for Claude Code status line.",
   "type": "module",
   "license": "MIT",

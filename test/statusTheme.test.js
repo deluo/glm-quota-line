@@ -43,6 +43,15 @@ test("buildStatusViewModel prioritizes the 5h token quota and exposes weekly sum
   assert.equal(model.severity, "good");
 });
 
+test("severity boundaries at 30 and 60 percent", () => {
+  const base = { kind: "success", level: "lite", display: "percent", nextResetTime: 1774939627716 };
+
+  assert.equal(buildStatusViewModel({ ...base, leftPercent: 60, usedPercent: 40 }).severity, "good");
+  assert.equal(buildStatusViewModel({ ...base, leftPercent: 59, usedPercent: 41 }).severity, "warn");
+  assert.equal(buildStatusViewModel({ ...base, leftPercent: 30, usedPercent: 70 }).severity, "warn");
+  assert.equal(buildStatusViewModel({ ...base, leftPercent: 29, usedPercent: 71 }).severity, "danger");
+});
+
 test("buildBar preserves partial-fill semantics", () => {
   const bar = buildBar(3, 10);
 

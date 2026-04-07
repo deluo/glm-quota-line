@@ -149,11 +149,13 @@ export async function handleCommand(args, output = process.stdout, dependencies 
   if (command === "config" && subcommand === "set") {
     const configKey = CONFIG_KEYS[key];
     if (!configKey) {
+      process.exitCode = 1;
       output.write("Supported config keys: style, display, theme, palette, auth-token, base-url\n");
       return true;
     }
 
     if (!configKey.validate(value)) {
+      process.exitCode = 1;
       output.write(`${configKey.invalidMessage}\n`);
       return true;
     }
@@ -168,12 +170,25 @@ export async function handleCommand(args, output = process.stdout, dependencies 
   if (command === "config" && subcommand === "unset") {
     const configKey = CONFIG_KEYS[key];
     if (!configKey) {
+      process.exitCode = 1;
       output.write("Supported config keys: style, display, theme, palette, auth-token, base-url\n");
       return true;
     }
 
     await unsetToolConfigValue(configKey.property);
     output.write(`Removed ${key}\nconfig: ${getToolConfigPath()}\n`);
+    return true;
+  }
+
+  if (command === "config") {
+    process.exitCode = 1;
+    output.write("Supported config subcommands: show, set, unset\n");
+    return true;
+  }
+
+  if (command) {
+    process.exitCode = 1;
+    output.write(`Unknown command: ${command}\nRun 'glm-quota-line -h' for usage.\n`);
     return true;
   }
 

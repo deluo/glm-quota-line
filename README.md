@@ -106,7 +106,7 @@ glm-quota-line config set <style|display|theme|palette|auth-token|base-url> <val
 glm-quota-line config unset <key>
 ```
 
-完整说明运行 `glm-quota-line --help`。
+运行 `glm-quota-line --help` 查看完整说明。
 
 `glm-quota-line --version` 可直接查看当前安装版本；`check-update` 只检查并提示升级命令，不会自动修改环境。
 
