@@ -1,7 +1,5 @@
 import {
-  DEFAULT_PALETTE,
   DEFAULT_THEME,
-  normalizePalette,
   normalizeTheme
 } from "../../shared/constants.js";
 
@@ -9,8 +7,11 @@ const ANSI = {
   reset: "\u001b[0m",
   bold: "\u001b[1m",
   dim: "\u001b[2m",
+  underline: "\u001b[4m",
+  black: "\u001b[30m",
   gray: "\u001b[90m",
   white: "\u001b[37m",
+  blue: "\u001b[34m",
   cyan: "\u001b[36m",
   green: "\u001b[32m",
   yellow: "\u001b[33m",
@@ -50,9 +51,11 @@ function getDarkCodes(tone) {
 function getMonoCodes(tone) {
   switch (tone) {
     case "muted":
+      return [ANSI.gray];
     case "barEmpty":
-      return [ANSI.dim];
+      return [ANSI.dim, ANSI.gray];
     case "reset":
+      return [ANSI.underline];
     case "label":
     case "good":
     case "warn":
@@ -64,17 +67,39 @@ function getMonoCodes(tone) {
   }
 }
 
+function getLightCodes(tone) {
+  switch (tone) {
+    case "label":
+    case "reset":
+      return [ANSI.blue];
+    case "muted":
+      return [ANSI.gray];
+    case "barEmpty":
+      return [ANSI.dim, ANSI.gray];
+    case "good":
+      return [ANSI.green];
+    case "warn":
+      return [ANSI.yellow];
+    case "danger":
+      return [ANSI.red];
+    case "neutral":
+      return [ANSI.black];
+    default:
+      return [];
+  }
+}
+
 export function applyTheme(segments, options = {}) {
   const theme = normalizeTheme(options.theme || DEFAULT_THEME);
-  const palette = normalizePalette(options.palette || DEFAULT_PALETTE);
-
-  if (theme !== "ansi") {
-    return segments.map((segment) => segment.text).join("");
-  }
 
   return segments
     .map((segment) => {
-      const codes = palette === "mono" ? getMonoCodes(segment.tone) : getDarkCodes(segment.tone);
+      const codes =
+        theme === "mono"
+          ? getMonoCodes(segment.tone)
+          : theme === "light"
+            ? getLightCodes(segment.tone)
+            : getDarkCodes(segment.tone);
       return applyCodes(segment.text, codes);
     })
     .join("");

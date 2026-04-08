@@ -1,6 +1,5 @@
 import {
   normalizeDisplayMode,
-  normalizePalette,
   normalizeStatusStyle,
   normalizeTheme
 } from "../../shared/constants.js";
@@ -26,15 +25,6 @@ function createQuotaTextSegments(quota, displayMode, tone) {
   if (mode === "used") {
     return [
       { text: `${quota.label} used `, tone: "muted" },
-      { text: quota.usedText, tone }
-    ];
-  }
-
-  if (mode === "both") {
-    return [
-      { text: `${quota.label} left `, tone: "muted" },
-      { text: quota.leftText, tone },
-      { text: " used ", tone: "muted" },
       { text: quota.usedText, tone }
     ];
   }
@@ -113,7 +103,21 @@ function createCompactSegments(model) {
   return segments;
 }
 
-function createBarSegments(model, barWidth) {
+function createBarMetric(quota, displayMode) {
+  if (normalizeDisplayMode(displayMode) === "used") {
+    return {
+      percent: quota.usedPercent,
+      text: quota.usedText
+    };
+  }
+
+  return {
+    percent: quota.leftPercent,
+    text: quota.leftText
+  };
+}
+
+function createBarSegments(model, displayMode) {
   if (
     !Number.isFinite(model.primaryQuota?.leftPercent) ||
     !Number.isFinite(model.primaryQuota?.usedPercent)
@@ -121,7 +125,8 @@ function createBarSegments(model, barWidth) {
     return createErrorSegments({ kind: "unavailable" });
   }
 
-  const bar = buildBar(model.primaryQuota.usedPercent, barWidth);
+  const metric = createBarMetric(model.primaryQuota, displayMode);
+  const bar = buildBar(metric.percent);
   const severityTone = model.severity;
   const segments = [
     { text: model.levelLabel, tone: "label" },
@@ -129,7 +134,7 @@ function createBarSegments(model, barWidth) {
     { text: bar.filledText, tone: severityTone },
     { text: bar.emptyText, tone: "barEmpty" },
     { text: " ", tone: "plain" },
-    { text: model.primaryQuota.leftText, tone: severityTone }
+    { text: metric.text, tone: severityTone }
   ];
 
   if (model.secondaryQuota) {
@@ -152,8 +157,7 @@ export function formatStatus(result, options = {}) {
 
   if (model.kind !== "success") {
     return applyTheme(createErrorSegments(model), {
-      theme: normalizeTheme(options.theme),
-      palette: normalizePalette(options.palette)
+      theme: normalizeTheme(options.theme)
     });
   }
 
@@ -163,13 +167,12 @@ export function formatStatus(result, options = {}) {
   if (style === "compact") {
     segments = createCompactSegments(model);
   } else if (style === "bar") {
-    segments = createBarSegments(model, options.barWidth);
+    segments = createBarSegments(model, options.displayMode);
   } else {
     segments = createTextSegments(model, options.displayMode);
   }
 
   return applyTheme(segments, {
-    theme: normalizeTheme(options.theme),
-    palette: normalizePalette(options.palette)
+    theme: normalizeTheme(options.theme)
   });
 }

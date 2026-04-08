@@ -1,19 +1,33 @@
 import crypto from "node:crypto";
+import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
 import {
-  DEFAULT_BAR_WIDTH,
   DEFAULT_CACHE_TTL_MS,
   DEFAULT_CN_BASE_URL,
   DEFAULT_INTL_BASE_URL,
   DEFAULT_DISPLAY_MODE,
-  DEFAULT_PALETTE,
   DEFAULT_QUOTA_URL,
   DEFAULT_STYLE,
   DEFAULT_THEME,
   DEFAULT_TIMEOUT_MS
 } from "./constants.js";
+
+function getClaudeSettingsPath() {
+  return path.join(os.homedir(), ".claude", "settings.json");
+}
+
+async function readClaudeEnv(claudeSettingsPath) {
+  try {
+    const filePath = claudeSettingsPath || getClaudeSettingsPath();
+    const raw = await fs.readFile(filePath, "utf8");
+    const settings = JSON.parse(raw);
+    return settings?.env && typeof settings.env === "object" ? settings.env : null;
+  } catch {
+    return null;
+  }
+}
 
 function getCacheRoot() {
   if (process.platform === "darwin") {
@@ -63,13 +77,17 @@ export function normalizeOptionalString(value) {
   return value.trim();
 }
 
-export function loadConfig(env = process.env, overrides = {}) {
+export async function loadConfig(env = process.env, overrides = {}, options = {}) {
+  const claudeEnv = await readClaudeEnv(options.claudeSettingsPath);
   const anthropicBaseUrl =
-    normalizeOptionalString(overrides.baseUrl) || normalizeOptionalString(env.ANTHROPIC_BASE_URL);
+    normalizeOptionalString(overrides.baseUrl) ||
+    normalizeOptionalString(env.ANTHROPIC_BASE_URL) ||
+    normalizeOptionalString(claudeEnv?.ANTHROPIC_BASE_URL);
   const derivedQuotaUrl = deriveQuotaUrl(anthropicBaseUrl);
   const authorization =
     normalizeOptionalString(overrides.authToken) ||
-    normalizeOptionalString(env.ANTHROPIC_AUTH_TOKEN);
+    normalizeOptionalString(env.ANTHROPIC_AUTH_TOKEN) ||
+    normalizeOptionalString(claudeEnv?.ANTHROPIC_AUTH_TOKEN);
   const tokenHash = authorization
     ? crypto.createHash("sha256").update(authorization).digest("hex").slice(0, 12)
     : "anonymous";
@@ -84,8 +102,6 @@ export function loadConfig(env = process.env, overrides = {}) {
     displayMode: DEFAULT_DISPLAY_MODE,
     style: DEFAULT_STYLE,
     theme: DEFAULT_THEME,
-    palette: DEFAULT_PALETTE,
-    barWidth: DEFAULT_BAR_WIDTH,
     cacheFilePath: path.join(getCacheRoot(), "glm-quota-line", cacheFileName)
   };
 }

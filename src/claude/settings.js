@@ -5,7 +5,6 @@ import {
   TOOL_CONFIG_MANAGED_BY,
   TOOL_CONFIG_SCHEMA_VERSION,
   isValidDisplayMode,
-  isValidPalette,
   isValidStatusStyle,
   isValidTheme
 } from "../shared/constants.js";
@@ -54,10 +53,6 @@ function normalizeToolConfig(config) {
 
   if (isValidTheme(base.theme)) {
     normalized.theme = base.theme;
-  }
-
-  if (isValidPalette(base.palette)) {
-    normalized.palette = base.palette;
   }
 
   const authToken = normalizeOptionalString(base.authToken);

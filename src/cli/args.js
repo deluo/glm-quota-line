@@ -59,14 +59,6 @@ export function parseArgs(argv = process.argv.slice(2)) {
       }
       continue;
     }
-
-    if (arg === "--palette" || arg.startsWith("--palette=")) {
-      options.palette = takeValue(argv, index);
-      if (!arg.includes("=")) {
-        index += 1;
-      }
-      continue;
-    }
   }
 
   options.positionals = positionals;

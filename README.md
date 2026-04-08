@@ -1,7 +1,7 @@
 <h1 align="center">glm-quota-line</h1>
 
 <p align="center">
-  一行命令安装、零依赖，在 Claude Code 状态栏实时显示智谱（Zhipu）GLM Coding Plan 配额余额与重置时间。数据来自官方接口，精准非估算。
+  为 Claude Code 打造的智谱 GLM Coding Plan 配额监控工具。数据精准同步官网，无需切换窗口，随时掌握用量。
 </p>
 
 <p align="center">
@@ -15,15 +15,14 @@
   <a href="./README.en.md">English</a>
 </p>
 
-`glm-quota-line` 读取智谱（Zhipu）GLM Coding Plan 配额接口、缓存结果，并输出一行适合 Claude Code `statusLine.command` 的状态文本。通过 `SessionStart` hook 预刷新缓存，新会话不会显示旧配额。
-
 ## 功能
 
-- **一行命令安装** — `glm-quota-line install` 自动接入 Claude Code 状态栏和 `SessionStart` hook
-- **精准配额显示** — 数据来自官方配额接口，非估算；同时展示 5 小时和周 token 配额
+- **终端快速查询** — 直接运行 `glm-quota-line` 即可在终端查看配额，无需启动 Claude Code
+- **Claude Code 状态栏** — 安装后自动嵌入状态栏，实时显示配额余额和重置时间
+- **进度条可视化** — 默认 bar 风格，一眼看清剩余比例
+- **智能缓存** — 按会话、TTL 和 token 用量分级刷新；`SessionStart` hook 预刷新，新会话不显示旧数据
 - **国内 + 国际端点** — 自动识别 `open.bigmodel.cn` 和 `api.z.ai`
 - **零依赖** — 无运行时依赖，单一用途
-- **智能缓存** — 按会话、TTL 和 token 用量刷新；支持代理/网关手动覆盖鉴权
 
 ## 快速开始
 
@@ -32,13 +31,13 @@ npm install -g glm-quota-line
 glm-quota-line install
 ```
 
-两步完成，开箱即用。默认输出（`style=text`，`theme=ansi`，`palette=dark`）：
+安装完成。Claude Code 底部状态栏会自动显示配额：
 
-```text
-GLM Lite | 5h 91% | week 47% | reset 14:47
+```
+GLM Lite █████████░ 91% | W 47% | 14:47
 ```
 
-同时显示 5 小时配额（主要）和周配额（次要），并自动展示重置时间。
+也可以直接在终端运行 `glm-quota-line` 快速查看用量，无需启动 Claude Code。
 
 升级版本：
 
@@ -47,40 +46,54 @@ npm install -g glm-quota-line
 glm-quota-line check-update
 ```
 
-## 自定义样式
+## 配置项
 
-所有样式配置均为可选，按需调整：
+所有配置均为可选，按需调整。通过 `glm-quota-line config set` 持久化，或用 CLI 参数临时覆盖。
+
+### style — 输出布局
+
+| 值 | 说明 | 示例 |
+|---|---|---|
+| `bar`（默认） | 进度条可视化 | `GLM Lite █████████░ 91% \| W 47% \| 14:47` |
+| `text` | 完整文本 | `GLM Lite \| 5h 91% \| week 47% \| reset 14:47` |
+| `compact` | 紧凑模式 | `GLM 5h 91% W 47% \| 14:47` |
 
 ```bash
-glm-quota-line config set style bar       # 布局: text / compact / bar
-glm-quota-line config set theme ansi      # 配色: plain / ansi
-glm-quota-line config set palette dark    # 色板: dark / mono（仅 theme=ansi 时生效）
+glm-quota-line config set style compact
 ```
 
-不同 style 效果：
+### theme — 主题配色
 
-```text
-# style=text（默认）
-GLM Lite | 5h 91% | week 47% | reset 14:47
+| 值 | 说明 |
+|---|---|
+| `dark`（默认） | 深色终端，彩色对比最强 |
+| `light` | 浅色/白色终端，蓝调配色 |
+| `mono` | 灰阶，极简低干扰 |
 
-# style=compact
-GLM 5h 91% W 47% | 14:47
-
-# style=bar
-GLM Lite █░░░░░░░░░ 91% | W 47% | 14:47
+```bash
+glm-quota-line config set theme light
 ```
 
-推荐搭配：
+配额百分比会根据剩余量自动变色：
 
-| 使用场景   | 配置                                          |
-| ---------- | --------------------------------------------- |
-| 深色终端   | `style=bar`, `theme=ansi`, `palette=dark`     |
-| 浅色终端   | `style=compact`, `theme=ansi`, `palette=mono` |
-| 纯文本回退 | 任意 `style`，`theme=plain`                   |
+- 绿色 — 剩余 >= 60%
+- 黄色 — 剩余 30%–60%
+- 红色 — 剩余 < 30%
 
-## 自定义鉴权
+### display — 显示指标
 
-如果 Claude Code 运行在代理或网关后面，注入的 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL` 不是实际值：
+| 值 | 说明 |
+|---|---|
+| `left`（默认） | 显示剩余量（进度条填充 = 剩余比例） |
+| `used` | 显示已用量（进度条填充 = 已用比例） |
+
+```bash
+glm-quota-line config set display used
+```
+
+### auth-token / base-url — 自定义鉴权
+
+当 Claude Code 运行在代理或网关后面时，注入的 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL` 可能不是实际值，可手动覆盖：
 
 ```bash
 glm-quota-line config set auth-token <your-real-token>
@@ -89,26 +102,37 @@ glm-quota-line config set base-url https://open.bigmodel.cn/api/anthropic
 glm-quota-line config set base-url https://api.z.ai/api/anthropic
 ```
 
-清除：`glm-quota-line config unset auth-token` / `base-url`。手动保存的值优先于 Claude 注入的环境变量。
+清除：`glm-quota-line config unset auth-token` / `base-url`。
 
-## 命令
+鉴权来源优先级（从高到低）：
+
+1. `config set` 持久化的值
+2. 环境变量 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL`
+3. `~/.claude/settings.json` 中的 `env` 字段
+
+## 推荐搭配
+
+| 使用场景 | 配置 |
+|---|---|
+| 深色终端（默认） | `style=bar`, `theme=dark` |
+| 浅色终端 | `style=bar`, `theme=light` |
+| 极简工作流 | `style=compact`, `theme=mono` |
+| 关注已用量 | `style=bar`, `display=used` |
+
+## 命令参考
 
 ```bash
-glm-quota-line [--style text|compact|bar] [--display left|used|both]
-               [--theme plain|ansi] [--palette dark|mono]
-
+glm-quota-line [--style text|compact|bar] [--display left|used] [--theme dark|light|mono]
 glm-quota-line install [--force]
 glm-quota-line uninstall
 glm-quota-line version
 glm-quota-line check-update
 glm-quota-line config show
-glm-quota-line config set <style|display|theme|palette|auth-token|base-url> <value>
+glm-quota-line config set <style|display|theme|auth-token|base-url> <value>
 glm-quota-line config unset <key>
 ```
 
 运行 `glm-quota-line --help` 查看完整说明。
-
-`glm-quota-line --version` 可直接查看当前安装版本；`check-update` 只检查并提示升级命令，不会自动修改环境。
 
 ## 说明
 

@@ -1,7 +1,7 @@
 <h1 align="center">glm-quota-line</h1>
 
 <p align="center">
-  One-command install, zero dependencies. Shows accurate Zhipu GLM Coding Plan quota balance and reset time in the Claude Code status line — data from the official API, not estimated.
+  A Zhipu GLM Coding Plan quota monitor built for Claude Code. Accurate, real-time data from the official site — no window switching, just glance and go.
 </p>
 
 <p align="center">
@@ -15,15 +15,14 @@
   <a href="./README.md">简体中文</a>
 </p>
 
-`glm-quota-line` reads the Zhipu GLM Coding Plan quota API, caches results, and prints a short status line for Claude Code's `statusLine.command`. A `SessionStart` hook pre-refreshes the cache so new sessions never show stale data.
-
 ## Features
 
-- **One-command install** — `glm-quota-line install` wires status line and `SessionStart` hooks into Claude Code automatically
-- **Accurate quota display** — reads directly from the official GLM quota API, not estimated; shows both 5-hour and weekly token quotas
+- **Terminal quick check** — run `glm-quota-line` in any terminal to view your quota without launching Claude Code
+- **Claude Code status line** — auto-embeds in the status bar after install, shows quota balance and reset time in real time
+- **Bar visualization** — default bar style shows remaining quota at a glance
+- **Smart caching** — tiered refresh by session, TTL, and token usage; `SessionStart` hook pre-refreshes so new sessions never show stale data
 - **Domestic + international endpoints** — auto-detects `open.bigmodel.cn` and `api.z.ai`
 - **Zero dependencies** — no runtime deps, single-purpose CLI
-- **Smart caching** — refreshes by session, TTL, and token usage; supports manual auth overrides for proxy/gateway setups
 
 ## Quick Start
 
@@ -32,13 +31,13 @@ npm install -g glm-quota-line
 glm-quota-line install
 ```
 
-That's it — works out of the box. Default output (`style=text`, `theme=ansi`, `palette=dark`):
+Done. Your Claude Code status bar will now show the quota:
 
-```text
-GLM Lite | 5h 91% | week 47% | reset 14:47
+```
+GLM Lite █████████░ 91% | W 47% | 14:47
 ```
 
-Both the 5-hour quota (primary) and weekly quota (secondary) are shown with automatic reset time.
+You can also run `glm-quota-line` directly in the terminal to check your quota without launching Claude Code.
 
 Upgrade:
 
@@ -47,38 +46,52 @@ npm install -g glm-quota-line
 glm-quota-line check-update
 ```
 
-## Custom Styles
+## Configuration
 
-All style options are optional — adjust only if needed:
+All options are optional. Persist with `glm-quota-line config set`, or override per-invocation with CLI flags.
+
+### style — Output layout
+
+| Value | Description | Example |
+|---|---|---|
+| `bar` (default) | Progress bar | `GLM Lite █████████░ 91% \| W 47% \| 14:47` |
+| `text` | Full text | `GLM Lite \| 5h 91% \| week 47% \| reset 14:47` |
+| `compact` | Compact mode | `GLM 5h 91% W 47% \| 14:47` |
 
 ```bash
-glm-quota-line config set style bar       # layout: text / compact / bar
-glm-quota-line config set theme ansi      # color: plain / ansi
-glm-quota-line config set palette dark    # palette: dark / mono (only when theme=ansi)
+glm-quota-line config set style compact
 ```
 
-Different `style` outputs:
+### theme — Color theme
 
-```text
-# style=text (default)
-GLM Lite | 5h 91% | week 47% | reset 14:47
+| Value | Description |
+|---|---|
+| `dark` (default) | Dark terminal, strongest color contrast |
+| `light` | White/light terminal, blue-tinted accents |
+| `mono` | Grayscale, minimal distraction |
 
-# style=compact
-GLM 5h 91% W 47% | 14:47
-
-# style=bar
-GLM Lite █░░░░░░░░░ 91% | W 47% | 14:47
+```bash
+glm-quota-line config set theme light
 ```
 
-Recommended combinations:
+Quota percentage colors change automatically based on remaining amount:
 
-| Use case       | Config                                        |
-| -------------- | --------------------------------------------- |
-| Dark terminal  | `style=bar`, `theme=ansi`, `palette=dark`     |
-| Light terminal | `style=compact`, `theme=ansi`, `palette=mono` |
-| Plain fallback | any `style`, `theme=plain`                    |
+- Green — remaining >= 60%
+- Yellow — remaining 30%–60%
+- Red — remaining < 30%
 
-## Custom Auth
+### display — Quota metric
+
+| Value | Description |
+|---|---|
+| `left` (default) | Show remaining quota (bar fills with remaining) |
+| `used` | Show used quota (bar fills with used) |
+
+```bash
+glm-quota-line config set display used
+```
+
+### auth-token / base-url — Custom auth
 
 If Claude Code runs behind a gateway or proxy and the injected `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL` are not the real values:
 
@@ -89,26 +102,37 @@ glm-quota-line config set base-url https://open.bigmodel.cn/api/anthropic
 glm-quota-line config set base-url https://api.z.ai/api/anthropic
 ```
 
-Clear with `glm-quota-line config unset auth-token` / `base-url`. Stored overrides take precedence over Claude-injected environment variables.
+Clear with `glm-quota-line config unset auth-token` / `base-url`.
 
-## Commands
+Auth source priority (highest to lowest):
+
+1. Values persisted via `config set`
+2. Environment variables `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL`
+3. `env` field in `~/.claude/settings.json`
+
+## Recommended Combinations
+
+| Use case | Config |
+|---|---|
+| Dark terminal (default) | `style=bar`, `theme=dark` |
+| Light terminal | `style=bar`, `theme=light` |
+| Minimal setup | `style=compact`, `theme=mono` |
+| Track usage | `style=bar`, `display=used` |
+
+## Command Reference
 
 ```bash
-glm-quota-line [--style text|compact|bar] [--display left|used|both]
-               [--theme plain|ansi] [--palette dark|mono]
-
+glm-quota-line [--style text|compact|bar] [--display left|used] [--theme dark|light|mono]
 glm-quota-line install [--force]
 glm-quota-line uninstall
 glm-quota-line version
 glm-quota-line check-update
 glm-quota-line config show
-glm-quota-line config set <style|display|theme|palette|auth-token|base-url> <value>
+glm-quota-line config set <style|display|theme|auth-token|base-url> <value>
 glm-quota-line config unset <key>
 ```
 
 Run `glm-quota-line --help` for full descriptions.
-
-Use `glm-quota-line --version` to print the installed version. `check-update` only checks and prints the suggested upgrade command; it does not modify your environment.
 
 ## Notes
 

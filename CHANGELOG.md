@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.0
+
+- Replaced `theme`/`palette` two-config system with unified `theme` presets: `dark`, `light`, `mono`
+- Removed `palette` config and CLI flag entirely
+- Removed `display=both` option; display now supports only `left` (default) and `used`
+- Removed `bar-width` config option; bar width is fixed at 10
+- Changed default style from `text` to `bar`
+- Bar fill now represents remaining quota by default (was used); `display=used` fills by usage
+- Added `light` theme with blue accents for light terminals
+- `loadConfig` now reads `~/.claude/settings.json` env as a fallback auth source
+- `loadConfig` changed from sync to async; all callers updated
+- Updated README with complete config reference, display docs, and terminal quick-check usage
+
 ## 0.9.0
 
 - Replaced progressive tier-based backoff with diamond-shaped refresh strategy: high quota (80–100%) refreshes every 2 min, medium (30–79%) every 5 min, low (0–29%) every 2 min — frequent updates when usage is active or quota is near exhaustion, relaxed in between

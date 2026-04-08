@@ -53,13 +53,13 @@ test("severity boundaries at 30 and 60 percent", () => {
 });
 
 test("buildBar preserves partial-fill semantics", () => {
-  const bar = buildBar(3, 10);
+  const bar = buildBar(3);
 
   assert.equal(bar.filledText, STATUS_BAR_CHARACTERS.filled);
   assert.equal(bar.emptyText, STATUS_BAR_CHARACTERS.empty.repeat(9));
 });
 
-test("ansi dark theme colors the bar without changing visible text", () => {
+test("dark theme colors the bar without changing visible text", () => {
   const output = formatStatus(
     {
       kind: "success",
@@ -71,19 +71,39 @@ test("ansi dark theme colors the bar without changing visible text", () => {
     },
     {
       style: "bar",
-      theme: "ansi",
-      palette: "dark",
-      barWidth: 10
+      theme: "dark"
     }
   );
-  const bar = buildBar(82, 10);
+  const bar = buildBar(18);
 
   assert.match(output, /\u001b\[/);
   assert.match(output, /\u001b\[36m14:47\u001b\[0m/);
   assert.equal(stripAnsi(output), `GLM Lite ${bar.filledText}${bar.emptyText} 18% | 14:47`);
 });
 
-test("ansi mono theme uses emphasis without changing visible text", () => {
+test("dark theme respects used display mode for bar semantics", () => {
+  const output = formatStatus(
+    {
+      kind: "success",
+      level: "lite",
+      display: "percent",
+      leftPercent: 18,
+      usedPercent: 82,
+      nextResetTime: 1774939627716
+    },
+    {
+      style: "bar",
+      displayMode: "used",
+      theme: "dark"
+    }
+  );
+  const bar = buildBar(82);
+
+  assert.match(output, /\u001b\[/);
+  assert.equal(stripAnsi(output), `GLM Lite ${bar.filledText}${bar.emptyText} 82% | 14:47`);
+});
+
+test("mono theme uses grayscale emphasis without changing visible text", () => {
   const output = formatStatus(
     {
       kind: "success",
@@ -95,12 +115,34 @@ test("ansi mono theme uses emphasis without changing visible text", () => {
     },
     {
       style: "text",
-      theme: "ansi",
-      palette: "mono"
+      theme: "mono"
     }
   );
 
   assert.match(output, /\u001b\[/);
-  assert.match(output, /\u001b\[1m14:47\u001b\[0m/);
+  assert.match(output, /\u001b\[4m14:47\u001b\[0m/);
+  assert.match(output, /\u001b\[90m \| reset \u001b\[0m/);
   assert.equal(stripAnsi(output), "GLM Lite | 5h 91% | reset 14:47");
+});
+
+test("light theme uses blue accents without changing visible text", () => {
+  const output = formatStatus(
+    {
+      kind: "success",
+      level: "lite",
+      display: "percent",
+      leftPercent: 47,
+      usedPercent: 53,
+      nextResetTime: 1774939627716
+    },
+    {
+      style: "text",
+      theme: "light"
+    }
+  );
+
+  assert.match(output, /\u001b\[/);
+  assert.match(output, /\u001b\[34mGLM Lite\u001b\[0m/);
+  assert.match(output, /\u001b\[34m14:47\u001b\[0m/);
+  assert.equal(stripAnsi(output), "GLM Lite | 5h 47% | reset 14:47");
 });

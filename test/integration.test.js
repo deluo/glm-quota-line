@@ -23,6 +23,14 @@ import {
 import { refreshQuotaOnSessionStart } from "../src/claude/sessionStart.js";
 import { createQuotaConfig, makeJsonResponse, withTempDir } from "./helpers.js";
 
+function stripAnsi(value) {
+  return value.replace(/\u001b\[[0-9;]*m/g, "");
+}
+
+function renderStatus(result, options = {}) {
+  return stripAnsi(formatStatus(result, { theme: "dark", ...options }));
+}
+
 const SUCCESS_BODY = {
   code: 200,
   msg: "操作成功",
@@ -94,19 +102,15 @@ test("formats a successful response and writes cache", async () => {
     assert.equal(result.display, "percent");
     assert.equal(result.primaryQuotaKey, "token_5h");
     assert.equal(result.quotas.length, 2);
-    assert.equal(formatStatus(result, { theme: "plain" }), "GLM Lite | 5h 91% | week 47% | reset 14:47");
+    assert.equal(renderStatus(result, { style: "text" }), "GLM Lite | 5h 91% | week 47% | reset 14:47");
     assert.equal(
-      formatStatus(result, { theme: "plain", displayMode: "used" }),
+      renderStatus(result, { style: "text", displayMode: "used" }),
       "GLM Lite | 5h used 9% | week 47% | reset 14:47"
     );
+    assert.equal(renderStatus(result, { style: "compact" }), "GLM 5h 91% W 47% | 14:47");
     assert.equal(
-      formatStatus(result, { theme: "plain", displayMode: "both" }),
-      "GLM Lite | 5h left 91% used 9% | week 47% | reset 14:47"
-    );
-    assert.equal(formatStatus(result, { theme: "plain", style: "compact" }), "GLM 5h 91% W 47% | 14:47");
-    assert.equal(
-      formatStatus(result, { theme: "plain", style: "bar", barWidth: 10 }),
-      "GLM Lite █░░░░░░░░░ 91% | W 47% | 14:47"
+      renderStatus(result, { style: "bar" }),
+      "GLM Lite █████████░ 91% | W 47% | 14:47"
     );
 
     const cached = JSON.parse(await fs.readFile(cacheFilePath, "utf8"));
@@ -124,7 +128,7 @@ test("formats the legacy package response by ignoring TIME_LIMIT", async () => {
 
     assert.equal(result.kind, "success");
     assert.equal(result.quotas.length, 1);
-    assert.equal(formatStatus(result, { theme: "plain" }), "GLM Lite | 5h 98% | reset 04:35");
+    assert.equal(renderStatus(result, { style: "text" }), "GLM Lite | 5h 98% | reset 04:35");
   });
 });
 
@@ -140,7 +144,7 @@ test("returns auth expired without fetching when Authorization is missing", asyn
     });
 
     assert.equal(fetchCalls, 0);
-    assert.equal(formatStatus(result, { theme: "plain" }), "GLM | auth expired");
+    assert.equal(renderStatus(result), "GLM | auth expired");
   });
 });
 
@@ -175,7 +179,7 @@ test("returns fresh cached value without hitting the network", async () => {
     });
 
     assert.equal(fetchCalls, 0);
-    assert.equal(formatStatus(result, { theme: "plain" }), "GLM Lite | 5h 88% | reset 14:47");
+    assert.equal(renderStatus(result, { style: "text" }), "GLM Lite | 5h 88% | reset 14:47");
   });
 });
 
@@ -210,7 +214,7 @@ test("falls back to stale cache on unavailable responses", async () => {
       })
     });
 
-    assert.equal(formatStatus(result, { theme: "plain" }), "GLM Lite | 5h 77% | reset 14:47");
+    assert.equal(renderStatus(result, { style: "text" }), "GLM Lite | 5h 77% | reset 14:47");
   });
 });
 
@@ -245,7 +249,7 @@ test("auth failures do not reuse stale cache", async () => {
         })
     });
 
-    assert.equal(formatStatus(result, { theme: "plain" }), "GLM | auth expired");
+    assert.equal(renderStatus(result), "GLM | auth expired");
   });
 });
 
@@ -260,7 +264,7 @@ test("invalid tokens are treated as auth failures", async () => {
         })
     });
 
-    assert.equal(formatStatus(result, { theme: "plain" }), "GLM | auth expired");
+    assert.equal(renderStatus(result), "GLM | auth expired");
   });
 });
 
@@ -270,7 +274,7 @@ test("returns quota unavailable when no cache exists and the response is malform
       fetchImpl: async () => makeJsonResponse({ success: true, data: { limits: [] } })
     });
 
-    assert.equal(formatStatus(result, { theme: "plain" }), "GLM | quota unavailable");
+    assert.equal(renderStatus(result), "GLM | quota unavailable");
   });
 });
 
@@ -299,7 +303,7 @@ test("ignores TIME_LIMIT-only payloads and returns unavailable", async () => {
     });
 
     assert.equal(result.kind, "unavailable");
-    assert.equal(formatStatus(result, { theme: "plain" }), "GLM | quota unavailable");
+    assert.equal(renderStatus(result), "GLM | quota unavailable");
   });
 });
 
@@ -314,11 +318,11 @@ test("parses CLI args for style and display", () => {
   });
 });
 
-test("official domestic environment variables take priority and derive the quota URL", () => {
-  const config = loadConfig({
+test("official domestic environment variables take priority and derive the quota URL", async () => {
+  const config = await loadConfig({
     ANTHROPIC_AUTH_TOKEN: "official-token",
     ANTHROPIC_BASE_URL: "https://open.bigmodel.cn/api/anthropic"
-  });
+  }, {}, { claudeSettingsPath: "/nonexistent/settings.json" });
 
   assert.equal(config.authorization, "official-token");
   assert.equal(config.quotaUrl, "https://open.bigmodel.cn/api/monitor/usage/quota/limit");
@@ -327,20 +331,20 @@ test("official domestic environment variables take priority and derive the quota
   assert.ok(!config.cacheFilePath.endsWith("cache.json"));
 });
 
-test("official international environment variables derive the z.ai quota URL", () => {
-  const config = loadConfig({
+test("official international environment variables derive the z.ai quota URL", async () => {
+  const config = await loadConfig({
     ANTHROPIC_AUTH_TOKEN: "official-token",
     ANTHROPIC_BASE_URL: "https://api.z.ai/api/anthropic"
-  });
+  }, {}, { claudeSettingsPath: "/nonexistent/settings.json" });
 
   assert.equal(config.authorization, "official-token");
   assert.equal(config.quotaUrl, "https://api.z.ai/api/monitor/usage/quota/limit");
 });
 
-test("default quota URL keeps the legacy domestic fallback when base url is absent", () => {
-  const config = loadConfig({
+test("default quota URL keeps the legacy domestic fallback when base url is absent", async () => {
+  const config = await loadConfig({
     ANTHROPIC_AUTH_TOKEN: "official-token"
-  });
+  }, {}, { claudeSettingsPath: "/nonexistent/settings.json" });
 
   assert.equal(config.authorization, "official-token");
   assert.equal(config.quotaUrl, "https://bigmodel.cn/api/monitor/usage/quota/limit");
@@ -388,7 +392,7 @@ test("picks the earliest-reset non-5h token window as the weekly quota when extr
     assert.equal(result.quotas[0].key, "token_5h");
     assert.equal(result.quotas[1].key, "token_week");
     assert.equal(result.quotas[1].leftPercent, 47);
-    assert.equal(formatStatus(result, { theme: "plain" }), "GLM Pro | 5h 91% | week 47% | reset 14:47");
+    assert.equal(renderStatus(result, { style: "text" }), "GLM Pro | 5h 91% | week 47% | reset 14:47");
   });
 });
 
@@ -421,14 +425,14 @@ test("token quota prefers explicit remaining counters over ambiguous percentage 
     assert.equal(result.kind, "success");
     assert.equal(result.leftPercent, 90);
     assert.equal(result.usedPercent, 10);
-    assert.equal(formatStatus(result, { theme: "plain" }), "GLM Lite | 5h 90% | reset 14:47");
+    assert.equal(renderStatus(result, { style: "text" }), "GLM Lite | 5h 90% | reset 14:47");
   });
 });
 
-test("different tokens produce different cache file paths", () => {
-  const configA = loadConfig({ ANTHROPIC_AUTH_TOKEN: "token-alpha" });
-  const configB = loadConfig({ ANTHROPIC_AUTH_TOKEN: "token-beta" });
-  const configEmpty = loadConfig({});
+test("different tokens produce different cache file paths", async () => {
+  const configA = await loadConfig({ ANTHROPIC_AUTH_TOKEN: "token-alpha" }, {}, { claudeSettingsPath: "/nonexistent/settings.json" });
+  const configB = await loadConfig({ ANTHROPIC_AUTH_TOKEN: "token-beta" }, {}, { claudeSettingsPath: "/nonexistent/settings.json" });
+  const configEmpty = await loadConfig({}, {}, { claudeSettingsPath: "/nonexistent/settings.json" });
 
   assert.notEqual(configA.cacheFilePath, configB.cacheFilePath);
   assert.notEqual(configA.cacheFilePath, configEmpty.cacheFilePath);
@@ -467,7 +471,7 @@ test("fresh cache does not trigger a network request", async () => {
     });
 
     assert.equal(fetchCalls, 0);
-    assert.equal(formatStatus(result, { theme: "plain" }), "GLM Lite | 5h 88% | reset 14:47");
+    assert.equal(renderStatus(result, { style: "text" }), "GLM Lite | 5h 88% | reset 14:47");
   });
 });
 
@@ -484,7 +488,7 @@ test("reads Claude status line input JSON from stdin", async () => {
   assert.equal(input.session_id, "claude-session-1");
 });
 
-test("bar style uses filled cells for used percentage and spaces for unused percentage", () => {
+test("bar style uses filled cells for left percentage by default", () => {
   const result = {
     kind: "success",
     level: "lite",
@@ -494,10 +498,39 @@ test("bar style uses filled cells for used percentage and spaces for unused perc
     nextResetTime: 1774939627716
   };
 
-  assert.equal(formatStatus(result, { theme: "plain", style: "bar", barWidth: 10 }), "GLM Lite █░░░░░░░░░ 97% | 14:47");
+  assert.equal(renderStatus(result, { style: "bar" }), "GLM Lite █████████░ 97% | 14:47");
 });
 
-test("bar style fills completely only when used percentage reaches 100", () => {
+test("bar style uses filled cells for used percentage when display mode is used", () => {
+  const result = {
+    kind: "success",
+    level: "lite",
+    display: "percent",
+    leftPercent: 97,
+    usedPercent: 3,
+    nextResetTime: 1774939627716
+  };
+
+  assert.equal(
+    renderStatus(result, { style: "bar", displayMode: "used" }),
+    "GLM Lite █░░░░░░░░░ 3% | 14:47"
+  );
+});
+
+test("bar style fills completely only when left percentage reaches 100 in left mode", () => {
+  const result = {
+    kind: "success",
+    level: "lite",
+    display: "percent",
+    leftPercent: 100,
+    usedPercent: 0,
+    nextResetTime: 1774939627716
+  };
+
+  assert.equal(renderStatus(result, { style: "bar" }), "GLM Lite ██████████ 100% | 14:47");
+});
+
+test("bar style fills completely only when used percentage reaches 100 in used mode", () => {
   const result = {
     kind: "success",
     level: "lite",
@@ -507,7 +540,10 @@ test("bar style fills completely only when used percentage reaches 100", () => {
     nextResetTime: 1774939627716
   };
 
-  assert.equal(formatStatus(result, { theme: "plain", style: "bar", barWidth: 10 }), "GLM Lite ██████████ 0% | 14:47");
+  assert.equal(
+    renderStatus(result, { style: "bar", displayMode: "used" }),
+    "GLM Lite ██████████ 100% | 14:47"
+  );
 });
 
 test("writes tool config values for style and display", async () => {

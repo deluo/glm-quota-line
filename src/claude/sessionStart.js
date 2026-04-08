@@ -11,7 +11,7 @@ export async function refreshQuotaOnSessionStart(options = {}) {
   const loadConfigFn = options.loadConfigFn ?? loadConfig;
   const resolveQuotaStatusFn = options.resolveQuotaStatusFn ?? resolveQuotaStatus;
   const config = {
-    ...loadConfigFn(options.env ?? process.env, userConfig),
+    ...(await loadConfigFn(options.env ?? process.env, userConfig)),
     sessionId: hookInput?.session_id || ""
   };
 

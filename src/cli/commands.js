@@ -1,6 +1,5 @@
 import {
   isValidDisplayMode,
-  isValidPalette,
   isValidStatusStyle,
   isValidTheme
 } from "../shared/constants.js";
@@ -42,17 +41,12 @@ const CONFIG_KEYS = {
   display: {
     property: "displayMode",
     validate: isValidDisplayMode,
-    invalidMessage: "Invalid display. Use: left, used, or both."
+    invalidMessage: "Invalid display. Use: left or used."
   },
   theme: {
     property: "theme",
     validate: isValidTheme,
-    invalidMessage: "Invalid theme. Use: plain or ansi."
-  },
-  palette: {
-    property: "palette",
-    validate: isValidPalette,
-    invalidMessage: "Invalid palette. Use: dark or mono."
+    invalidMessage: "Invalid theme. Use: dark, light, or mono."
   },
   "auth-token": {
     property: "authToken",
@@ -150,7 +144,7 @@ export async function handleCommand(args, output = process.stdout, dependencies 
     const configKey = CONFIG_KEYS[key];
     if (!configKey) {
       process.exitCode = 1;
-      output.write("Supported config keys: style, display, theme, palette, auth-token, base-url\n");
+      output.write("Supported config keys: style, display, theme, auth-token, base-url\n");
       return true;
     }
 
@@ -171,7 +165,7 @@ export async function handleCommand(args, output = process.stdout, dependencies 
     const configKey = CONFIG_KEYS[key];
     if (!configKey) {
       process.exitCode = 1;
-      output.write("Supported config keys: style, display, theme, palette, auth-token, base-url\n");
+      output.write("Supported config keys: style, display, theme, auth-token, base-url\n");
       return true;
     }
 

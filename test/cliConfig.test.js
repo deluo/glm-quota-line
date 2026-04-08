@@ -20,15 +20,14 @@ import { withTempDir } from "./helpers.js";
 
 const execFileAsync = promisify(execFile);
 
-test("parseArgs accepts theme, palette, and version flags", () => {
+test("parseArgs accepts theme and version flags", () => {
   const options = parseArgs([
     "--force",
     "--style",
     "bar",
     "--display=used",
     "--theme",
-    "ansi",
-    "--palette=mono",
+    "mono",
     "--version"
   ]);
 
@@ -36,15 +35,14 @@ test("parseArgs accepts theme, palette, and version flags", () => {
     force: true,
     style: "bar",
     displayMode: "used",
-    theme: "ansi",
-    palette: "mono",
+    theme: "mono",
     version: true,
     positionals: []
   });
 });
 
-test("stored auth token and base url override Claude environment values", () => {
-  const config = loadConfig(
+test("stored auth token and base url override Claude environment values", async () => {
+  const config = await loadConfig(
     {
       ANTHROPIC_AUTH_TOKEN: "gateway-token",
       ANTHROPIC_BASE_URL: "https://gateway.example.com/api/anthropic"
@@ -60,19 +58,17 @@ test("stored auth token and base url override Claude environment values", () => 
   assert.equal(config.quotaUrl, "https://open.bigmodel.cn/api/monitor/usage/quota/limit");
 });
 
-test("tool config persists theme and palette when set", async () => {
+test("tool config persists theme when set", async () => {
   await withTempDir(async (dir) => {
     const configPath = path.join(dir, "glm-quota-line.json");
 
-    await setToolConfigValue("theme", "ansi", configPath);
-    await setToolConfigValue("palette", "mono", configPath);
+    await setToolConfigValue("theme", "light", configPath);
 
     const config = await readToolConfig(configPath);
     assert.deepEqual(config, {
       schemaVersion: 1,
       managedBy: "glm-quota-line",
-      theme: "ansi",
-      palette: "mono",
+      theme: "light",
       install: {}
     });
   });
@@ -216,7 +212,7 @@ test("cli help includes command descriptions and examples", async () => {
   assert.match(stdout, /check-update\s+Check npm for a newer version and print the upgrade command\./);
   assert.match(stdout, /Options:/);
   assert.match(stdout, /-v, --version\s+Show the installed version\./);
-  assert.match(stdout, /--palette\s+ANSI palette: dark for dark terminals, mono for light terminals\./);
+  assert.match(stdout, /--theme\s+Theme preset: dark, light, or mono\./);
   assert.match(stdout, /Examples:/);
   assert.match(stdout, /glm-quota-line --version/);
   assert.match(stdout, /glm-quota-line check-update/);

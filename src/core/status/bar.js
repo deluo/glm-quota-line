@@ -1,16 +1,8 @@
-import { DEFAULT_BAR_WIDTH, STATUS_BAR_CHARACTERS } from "../../shared/constants.js";
+import { STATUS_BAR_CHARACTERS } from "../../shared/constants.js";
 
-function normalizeBarWidth(barWidth) {
-  if (!Number.isFinite(barWidth)) {
-    return DEFAULT_BAR_WIDTH;
-  }
-
-  return Math.min(20, Math.max(5, Math.round(barWidth)));
-}
-
-export function buildBar(usedPercent, barWidth, characters = STATUS_BAR_CHARACTERS) {
-  const safePercent = Math.min(100, Math.max(0, usedPercent));
-  const width = normalizeBarWidth(barWidth);
+export function buildBar(percent, characters = STATUS_BAR_CHARACTERS) {
+  const safePercent = Math.min(100, Math.max(0, percent));
+  const width = 10;
   let filledUnits;
 
   if (safePercent <= 0) {
@@ -29,4 +21,3 @@ export function buildBar(usedPercent, barWidth, characters = STATUS_BAR_CHARACTE
     emptyText: characters.empty.repeat(width - filledUnits)
   };
 }
-

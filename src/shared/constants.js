@@ -14,10 +14,8 @@ export const LOW_QUOTA_THRESHOLD = 30;
 export const RATE_LIMIT_RETRY_TTL_MS = 180_000;
 export const UNAVAILABLE_RETRY_TTL_MS = 120_000;
 export const DEFAULT_DISPLAY_MODE = "left";
-export const DEFAULT_STYLE = "text";
-export const DEFAULT_BAR_WIDTH = 10;
-export const DEFAULT_THEME = "ansi";
-export const DEFAULT_PALETTE = "dark";
+export const DEFAULT_STYLE = "bar";
+export const DEFAULT_THEME = "dark";
 
 export const STATUS_BAR_CHARACTERS = {
   filled: "█",
@@ -32,15 +30,11 @@ export function isValidStatusStyle(value) {
 }
 
 export function isValidDisplayMode(value) {
-  return value === "left" || value === "used" || value === "both";
+  return value === "left" || value === "used";
 }
 
 export function isValidTheme(value) {
-  return value === "plain" || value === "ansi";
-}
-
-export function isValidPalette(value) {
-  return value === "dark" || value === "mono";
+  return value === "dark" || value === "light" || value === "mono";
 }
 
 export function normalizeStatusStyle(value) {
@@ -53,8 +47,4 @@ export function normalizeDisplayMode(value) {
 
 export function normalizeTheme(value) {
   return isValidTheme(value) ? value : DEFAULT_THEME;
-}
-
-export function normalizePalette(value) {
-  return isValidPalette(value) ? value : DEFAULT_PALETTE;
 }
