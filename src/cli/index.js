@@ -4,22 +4,25 @@ import { handleCommand } from "./commands.js";
 import { parseArgs } from "./args.js";
 import { loadConfig } from "../shared/config.js";
 import { formatStatus } from "../core/status/format.js";
+import { formatQueryHuman } from "../core/query/format.js";
 import { readStatusLineInput } from "../claude/input.js";
+import { normalizeContextWindow } from "../claude/contextWindow.js";
 import { readToolConfig } from "../claude/settings.js";
 import { resolveQuotaStatus } from "../core/quota/service.js";
 import { getPackageVersion } from "../shared/packageInfo.js";
 import {
   isValidDisplayMode,
   isValidStatusStyle,
-  isValidTheme
+  isValidTheme,
+  normalizeDisplayMode
 } from "../shared/constants.js";
 
 function printHelp() {
   process.stdout.write(`glm-quota-line
 
 Usage:
-  glm-quota-line [--style text|compact|bar] [--display left|used]
-                 [--theme dark|light|mono]
+  glm-quota-line [--display left|used]
+  glm-quota-line [--style text|compact|bar] [--theme dark|light|mono] [--ctx on|off]
   glm-quota-line --version
   glm-quota-line install [--force]
   glm-quota-line uninstall
@@ -28,10 +31,16 @@ Usage:
   glm-quota-line config set style <text|compact|bar>
   glm-quota-line config set display <left|used>
   glm-quota-line config set theme <dark|light|mono>
+  glm-quota-line config set ctx <on|off>
   glm-quota-line config set auth-token <token>
   glm-quota-line config set base-url <url>
-  glm-quota-line config unset <style|display|theme|auth-token|base-url>
+  glm-quota-line config unset <style|display|theme|ctx|auth-token|base-url>
   glm-quota-line config show
+
+When run without arguments, displays comprehensive quota usage (5h, week, MCP)
+with full reset dates. Use --display to choose left or used metric.
+
+When used as a Claude Code status line, displays a compact one-line status bar.
 
 Commands:
   install                 Install glm-quota-line into Claude Code statusLine.command and SessionStart hooks.
@@ -44,20 +53,22 @@ Commands:
   config unset ...        Remove one persisted config key.
 
 Options:
-  --style                 Output layout: text, compact, or bar.
+  --style                 Output layout: text, compact, or bar (status line mode only).
   --display               Quota metric: left or used.
-  --theme                 Theme preset: dark, light, or mono.
+  --theme                 Theme preset: dark, light, or mono (status line mode only).
+  --ctx on|off            Show context window usage (default: on, status line mode only).
   --force                 Allow install to replace an unmanaged Claude status line.
   -v, --version           Show the installed version.
   -h, --help              Show this help text.
 
 Examples:
   glm-quota-line
+  glm-quota-line --display used
   glm-quota-line --version
-  glm-quota-line --style bar --theme dark
   glm-quota-line check-update
-  glm-quota-line config set style compact
+  glm-quota-line config set display used
   glm-quota-line config set theme light
+  glm-quota-line config set ctx on
   glm-quota-line config set auth-token <your-real-token>
   glm-quota-line install
 
@@ -71,7 +82,8 @@ function getStoredDisplayOverrides(userConfig) {
   return {
     ...(isValidStatusStyle(userConfig.style) ? { style: userConfig.style } : {}),
     ...(isValidDisplayMode(userConfig.displayMode) ? { displayMode: userConfig.displayMode } : {}),
-    ...(isValidTheme(userConfig.theme) ? { theme: userConfig.theme } : {})
+    ...(isValidTheme(userConfig.theme) ? { theme: userConfig.theme } : {}),
+    ...(userConfig.ctxEnabled === false ? { ctxEnabled: false } : {})
   };
 }
 
@@ -105,11 +117,24 @@ export async function main() {
     };
     const quotaStatus = await resolveQuotaStatus(config);
 
+    if (!statusLineInput) {
+      const displayMode = normalizeDisplayMode(
+        isValidDisplayMode(args.displayMode) ? args.displayMode : userConfig.displayMode
+      );
+      process.stdout.write(formatQueryHuman(quotaStatus, displayMode));
+      return;
+    }
+
+    const ctxModel = config.ctxEnabled !== false
+      ? normalizeContextWindow(statusLineInput)
+      : null;
+
     process.stdout.write(
       `${formatStatus(quotaStatus, {
         displayMode: config.displayMode,
         style: config.style,
-        theme: config.theme
+        theme: config.theme,
+        ctxModel
       })}\n`
     );
   } catch {
