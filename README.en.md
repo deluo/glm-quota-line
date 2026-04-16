@@ -17,8 +17,8 @@
 
 ## Features
 
-- **Terminal quick check** — run `glm-quota-line` in any terminal to view your quota without launching Claude Code
-- **Claude Code status line** — auto-embeds in the status bar after install, shows quota balance and reset time in real time
+- **Terminal quick check** — run `glm-quota-line` in any terminal to view your quota (including MCP) without launching Claude Code
+- **Claude Code status line** — auto-embeds in the status bar after install, shows quota balance, reset time, and context window usage in real time
 - **Bar visualization** — default bar style shows remaining quota at a glance
 - **Smart caching** — tiered refresh by session, TTL, and token usage; `SessionStart` hook pre-refreshes so new sessions never show stale data
 - **Domestic + international endpoints** — auto-detects `open.bigmodel.cn` and `api.z.ai`
@@ -34,7 +34,7 @@ glm-quota-line install
 Done. Your Claude Code status bar will now show the quota:
 
 ```
-GLM Lite █████████░ 91% | W 47% | 14:47
+GLM Lite █████████░ 91% | W 47% | 14:47 | ctx ███░░░ 45%
 ```
 
 You can also run `glm-quota-line` directly in the terminal to check your quota without launching Claude Code.
@@ -54,8 +54,8 @@ All options are optional. Persist with `glm-quota-line config set`, or override 
 
 | Value | Description | Example |
 |---|---|---|
-| `bar` (default) | Progress bar | `GLM Lite █████████░ 91% \| W 47% \| 14:47` |
-| `text` | Full text | `GLM Lite \| 5h 91% \| week 47% \| reset 14:47` |
+| `bar` (default) | Progress bar | `GLM Lite █████████░ 91% \| W 47% \| 14:47 \| ctx ███░░░ 45%` |
+| `text` | Full text | `GLM Lite \| 5h 91% \| week 47% \| reset 14:47 \| ctx 45%` |
 | `compact` | Compact mode | `GLM 5h 91% W 47% \| 14:47` |
 
 ```bash
@@ -91,6 +91,25 @@ Quota percentage colors change automatically based on remaining amount:
 glm-quota-line config set display used
 ```
 
+### ctx — Context window usage
+
+Show the current Claude Code context window usage percentage in the status line (status line mode only).
+
+| Value | Description |
+|---|---|
+| `on` (default) | Show context window usage |
+| `off` | Hide context window usage |
+
+```bash
+glm-quota-line config set ctx off
+```
+
+Context usage colors change automatically based on used percentage:
+
+- Green — used < 60%
+- Yellow — used 60%–79%
+- Red — used >= 80%
+
 ### auth-token / base-url — Custom auth
 
 If Claude Code runs behind a gateway or proxy and the injected `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL` are not the real values:
@@ -122,13 +141,13 @@ Auth source priority (highest to lowest):
 ## Command Reference
 
 ```bash
-glm-quota-line [--style text|compact|bar] [--display left|used] [--theme dark|light|mono]
+glm-quota-line [--style text|compact|bar] [--display left|used] [--theme dark|light|mono] [--ctx on|off]
 glm-quota-line install [--force]
 glm-quota-line uninstall
 glm-quota-line version
 glm-quota-line check-update
 glm-quota-line config show
-glm-quota-line config set <style|display|theme|auth-token|base-url> <value>
+glm-quota-line config set <style|display|theme|ctx|auth-token|base-url> <value>
 glm-quota-line config unset <key>
 ```
 
@@ -136,7 +155,8 @@ Run `glm-quota-line --help` for full descriptions.
 
 ## Notes
 
-- Only `TOKENS_LIMIT` quotas are shown; `TIME_LIMIT` / MCP usage is ignored
+- Shows `TOKENS_LIMIT` and `MCP_LIMIT` quotas; `TIME_LIMIT` is ignored
+- Context window usage is shown by default; disable with `--ctx off` or `config set ctx off`
 - Missing auth returns `GLM | auth expired`; API failures return `GLM | quota unavailable`
 - `install` does not replace an unmanaged status line unless `--force` is used
 - `install --force` backs up the previous entry; `uninstall` restores it when possible

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.0
+
+- Added MCP quota extraction from API response (`MCP_LIMIT` type), shown in CLI query output alongside token quotas
+- Added context window usage segment to Claude Code status line (percentage in text mode, mini bar in bar mode)
+- Added `--ctx on|off` CLI flag and `config set/unset ctx` to toggle context window display (default: on)
+- Context window severity colors: green (< 60%), yellow (60–79%), red (>= 80%)
+- Added `formatQueryHuman` and `formatQueryJson` for structured CLI quota output with MCP support
+- Made `buildBar` width configurable for compact ctx bar display
+- Fixed MCP matching to use explicit `type === 'MCP_LIMIT'` instead of exclusion-based logic
+
 ## 1.0.0
 
 - Replaced `theme`/`palette` two-config system with unified `theme` presets: `dark`, `light`, `mono`

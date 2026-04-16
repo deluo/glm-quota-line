@@ -17,8 +17,8 @@
 
 ## 功能
 
-- **终端快速查询** — 直接运行 `glm-quota-line` 即可在终端查看配额，无需启动 Claude Code
-- **Claude Code 状态栏** — 安装后自动嵌入状态栏，实时显示配额余额和重置时间
+- **终端快速查询** — 直接运行 `glm-quota-line` 即可在终端查看配额（含 MCP），无需启动 Claude Code
+- **Claude Code 状态栏** — 安装后自动嵌入状态栏，实时显示配额余额、重置时间和上下文窗口用量
 - **进度条可视化** — 默认 bar 风格，一眼看清剩余比例
 - **智能缓存** — 按会话、TTL 和 token 用量分级刷新；`SessionStart` hook 预刷新，新会话不显示旧数据
 - **国内 + 国际端点** — 自动识别 `open.bigmodel.cn` 和 `api.z.ai`
@@ -34,7 +34,7 @@ glm-quota-line install
 安装完成。Claude Code 底部状态栏会自动显示配额：
 
 ```
-GLM Lite █████████░ 91% | W 47% | 14:47
+GLM Lite █████████░ 91% | W 47% | 14:47 | ctx ███░░░ 45%
 ```
 
 也可以直接在终端运行 `glm-quota-line` 快速查看用量，无需启动 Claude Code。
@@ -54,8 +54,8 @@ glm-quota-line check-update
 
 | 值 | 说明 | 示例 |
 |---|---|---|
-| `bar`（默认） | 进度条可视化 | `GLM Lite █████████░ 91% \| W 47% \| 14:47` |
-| `text` | 完整文本 | `GLM Lite \| 5h 91% \| week 47% \| reset 14:47` |
+| `bar`（默认） | 进度条可视化 | `GLM Lite █████████░ 91% \| W 47% \| 14:47 \| ctx ███░░░ 45%` |
+| `text` | 完整文本 | `GLM Lite \| 5h 91% \| week 47% \| reset 14:47 \| ctx 45%` |
 | `compact` | 紧凑模式 | `GLM 5h 91% W 47% \| 14:47` |
 
 ```bash
@@ -91,6 +91,25 @@ glm-quota-line config set theme light
 glm-quota-line config set display used
 ```
 
+### ctx — 上下文窗口用量
+
+在状态栏显示当前 Claude Code 上下文窗口的使用百分比（仅状态栏模式）。
+
+| 值 | 说明 |
+|---|---|
+| `on`（默认） | 显示上下文窗口用量 |
+| `off` | 隐藏上下文窗口用量 |
+
+```bash
+glm-quota-line config set ctx off
+```
+
+上下文用量会根据已用比例自动变色：
+
+- 绿色 — 已用 < 60%
+- 黄色 — 已用 60%–79%
+- 红色 — 已用 >= 80%
+
 ### auth-token / base-url — 自定义鉴权
 
 当 Claude Code 运行在代理或网关后面时，注入的 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL` 可能不是实际值，可手动覆盖：
@@ -122,13 +141,13 @@ glm-quota-line config set base-url https://api.z.ai/api/anthropic
 ## 命令参考
 
 ```bash
-glm-quota-line [--style text|compact|bar] [--display left|used] [--theme dark|light|mono]
+glm-quota-line [--style text|compact|bar] [--display left|used] [--theme dark|light|mono] [--ctx on|off]
 glm-quota-line install [--force]
 glm-quota-line uninstall
 glm-quota-line version
 glm-quota-line check-update
 glm-quota-line config show
-glm-quota-line config set <style|display|theme|auth-token|base-url> <value>
+glm-quota-line config set <style|display|theme|ctx|auth-token|base-url> <value>
 glm-quota-line config unset <key>
 ```
 
@@ -136,7 +155,8 @@ glm-quota-line config unset <key>
 
 ## 说明
 
-- 只展示 `TOKENS_LIMIT` 配额，忽略 `TIME_LIMIT` / MCP 使用量
+- 展示 `TOKENS_LIMIT` 配额和 `MCP_LIMIT` 配额，忽略 `TIME_LIMIT`
+- 状态栏默认显示上下文窗口用量，可通过 `--ctx off` 或 `config set ctx off` 关闭
 - 鉴权缺失返回 `GLM | auth expired`；接口异常返回 `GLM | quota unavailable`
 - `install` 默认不会覆盖非本工具管理的状态栏，除非使用 `--force`
 - `install --force` 会备份旧配置，`uninstall` 会在可能时恢复
