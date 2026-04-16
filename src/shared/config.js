@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   DEFAULT_CACHE_TTL_MS,
   DEFAULT_CN_BASE_URL,
+  DEFAULT_CTX_ENABLED,
   DEFAULT_INTL_BASE_URL,
   DEFAULT_DISPLAY_MODE,
   DEFAULT_QUOTA_URL,
@@ -102,6 +103,7 @@ export async function loadConfig(env = process.env, overrides = {}, options = {}
     displayMode: DEFAULT_DISPLAY_MODE,
     style: DEFAULT_STYLE,
     theme: DEFAULT_THEME,
+    ctxEnabled: DEFAULT_CTX_ENABLED,
     cacheFilePath: path.join(getCacheRoot(), "glm-quota-line", cacheFileName)
   };
 }

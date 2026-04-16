@@ -55,6 +55,10 @@ function normalizeToolConfig(config) {
     normalized.theme = base.theme;
   }
 
+  if (typeof base.ctxEnabled === "boolean") {
+    normalized.ctxEnabled = base.ctxEnabled;
+  }
+
   const authToken = normalizeOptionalString(base.authToken);
   if (authToken) {
     normalized.authToken = authToken;

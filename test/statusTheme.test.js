@@ -146,3 +146,80 @@ test("light theme uses blue accents without changing visible text", () => {
   assert.match(output, /\u001b\[34m14:47\u001b\[0m/);
   assert.equal(stripAnsi(output), "GLM Lite | 5h 47% | reset 14:47");
 });
+
+test("ctx model appends context usage segment in text style", () => {
+  const output = formatStatus(
+    {
+      kind: "success",
+      level: "lite",
+      display: "percent",
+      leftPercent: 80,
+      usedPercent: 20,
+      nextResetTime: 1774939627716
+    },
+    {
+      style: "text",
+      theme: "dark",
+      ctxModel: { usedPercent: 45, remainingPercent: 55 }
+    }
+  );
+
+  assert.equal(stripAnsi(output), "GLM Lite | 5h 80% | reset 14:47 | ctx 45%");
+});
+
+test("ctx model appends context bar segment in bar style", () => {
+  const output = formatStatus(
+    {
+      kind: "success",
+      level: "lite",
+      display: "percent",
+      leftPercent: 80,
+      usedPercent: 20,
+      nextResetTime: 1774939627716
+    },
+    {
+      style: "bar",
+      theme: "dark",
+      ctxModel: { usedPercent: 50, remainingPercent: 50 }
+    }
+  );
+
+  assert.equal(stripAnsi(output), "GLM Lite ████████░░ 80% | 14:47 | ctx ███░░░ 50%");
+});
+
+test("ctx severity colors: good below 60%, warn at 60%, danger at 80%", () => {
+  const good = formatStatus(
+    { kind: "success", level: "lite", display: "percent", leftPercent: 80, usedPercent: 20 },
+    { style: "text", theme: "dark", ctxModel: { usedPercent: 30, remainingPercent: 70 } }
+  );
+  assert.match(good, /\u001b\[32m30%\u001b\[0m/);
+
+  const warn = formatStatus(
+    { kind: "success", level: "lite", display: "percent", leftPercent: 80, usedPercent: 20 },
+    { style: "text", theme: "dark", ctxModel: { usedPercent: 65, remainingPercent: 35 } }
+  );
+  assert.match(warn, /\u001b\[33m65%\u001b\[0m/);
+
+  const danger = formatStatus(
+    { kind: "success", level: "lite", display: "percent", leftPercent: 80, usedPercent: 20 },
+    { style: "text", theme: "dark", ctxModel: { usedPercent: 85, remainingPercent: 15 } }
+  );
+  assert.match(danger, /\u001b\[31m85%\u001b\[0m/);
+});
+
+test("ctx model is skipped when not provided", () => {
+  const output = formatStatus(
+    {
+      kind: "success",
+      level: "lite",
+      display: "percent",
+      leftPercent: 80,
+      usedPercent: 20,
+      nextResetTime: 1774939627716
+    },
+    { style: "text", theme: "dark" }
+  );
+
+  assert.equal(stripAnsi(output), "GLM Lite | 5h 80% | reset 14:47");
+  assert.equal(output.includes("ctx"), false);
+});

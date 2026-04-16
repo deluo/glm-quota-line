@@ -1,8 +1,7 @@
 import { STATUS_BAR_CHARACTERS } from "../../shared/constants.js";
 
-export function buildBar(percent, characters = STATUS_BAR_CHARACTERS) {
+export function buildBar(percent, characters = STATUS_BAR_CHARACTERS, width = 10) {
   const safePercent = Math.min(100, Math.max(0, percent));
-  const width = 10;
   let filledUnits;
 
   if (safePercent <= 0) {

@@ -48,6 +48,12 @@ const CONFIG_KEYS = {
     validate: isValidTheme,
     invalidMessage: "Invalid theme. Use: dark, light, or mono."
   },
+  ctx: {
+    property: "ctxEnabled",
+    validate: (v) => v === "on" || v === "off",
+    invalidMessage: "Invalid ctx. Use: on or off.",
+    transform: (v) => v === "on"
+  },
   "auth-token": {
     property: "authToken",
     validate: isNonEmptyString,
@@ -144,7 +150,7 @@ export async function handleCommand(args, output = process.stdout, dependencies 
     const configKey = CONFIG_KEYS[key];
     if (!configKey) {
       process.exitCode = 1;
-      output.write("Supported config keys: style, display, theme, auth-token, base-url\n");
+      output.write("Supported config keys: style, display, theme, ctx, auth-token, base-url\n");
       return true;
     }
 
@@ -154,7 +160,10 @@ export async function handleCommand(args, output = process.stdout, dependencies 
       return true;
     }
 
-    const config = await setToolConfigValue(configKey.property, value);
+    const config = await setToolConfigValue(
+      configKey.property,
+      configKey.transform ? configKey.transform(value) : value
+    );
     output.write(
       `Saved ${key}=${configKey.displayValue || config[configKey.property]}\nconfig: ${getToolConfigPath()}\n`
     );
@@ -165,7 +174,7 @@ export async function handleCommand(args, output = process.stdout, dependencies 
     const configKey = CONFIG_KEYS[key];
     if (!configKey) {
       process.exitCode = 1;
-      output.write("Supported config keys: style, display, theme, auth-token, base-url\n");
+      output.write("Supported config keys: style, display, theme, ctx, auth-token, base-url\n");
       return true;
     }
 

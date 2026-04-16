@@ -138,6 +138,30 @@ function pickPrimaryAndSecondaryTokenLimits(limits) {
   return sortTokenLimitsByResetTime(tokenLimits).slice(0, 2);
 }
 
+function buildMcpQuota(limits) {
+  const mcpLimit = limits.find(
+    (limit) => limit?.type === "MCP_LIMIT"
+  );
+
+  if (!mcpLimit) {
+    return null;
+  }
+
+  const percentages = computePercentages(mcpLimit);
+  if (!percentages) {
+    return null;
+  }
+
+  const nextResetTime = asFiniteNumber(mcpLimit?.nextResetTime);
+
+  return {
+    key: "mcp",
+    leftPercent: percentages.leftPercent,
+    usedPercent: percentages.usedPercent,
+    ...(nextResetTime !== null ? { nextResetTime } : {})
+  };
+}
+
 function buildTokenQuotas(limits) {
   const selectedLimits = pickPrimaryAndSecondaryTokenLimits(limits);
   if (selectedLimits.length === 0) {
@@ -193,6 +217,7 @@ export function parseQuotaResponse(response) {
   }
 
   const primaryQuota = quotas[0];
+  const mcp = buildMcpQuota(limits);
 
   return {
     kind: "success",
@@ -204,6 +229,7 @@ export function parseQuotaResponse(response) {
       ? { nextResetTime: primaryQuota.nextResetTime }
       : {}),
     primaryQuotaKey: primaryQuota.key,
-    quotas
+    quotas,
+    ...(mcp ? { mcp } : {})
   };
 }

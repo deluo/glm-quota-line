@@ -59,6 +59,20 @@ export function parseArgs(argv = process.argv.slice(2)) {
       }
       continue;
     }
+
+    if (arg === "--ctx" || arg.startsWith("--ctx=")) {
+      const val = takeValue(argv, index);
+      if (val !== "on" && val !== "off") {
+        process.stderr.write("Error: --ctx requires on or off\n");
+        process.exitCode = 1;
+        return options;
+      }
+      options.ctxEnabled = val === "on";
+      if (!arg.includes("=")) {
+        index += 1;
+      }
+      continue;
+    }
   }
 
   options.positionals = positionals;

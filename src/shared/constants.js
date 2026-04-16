@@ -48,3 +48,5 @@ export function normalizeDisplayMode(value) {
 export function normalizeTheme(value) {
   return isValidTheme(value) ? value : DEFAULT_THEME;
 }
+
+export const DEFAULT_CTX_ENABLED = true;

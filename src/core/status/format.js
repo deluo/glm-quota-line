@@ -152,13 +152,51 @@ function createBarSegments(model, displayMode) {
   return segments;
 }
 
+function getCtxSeverity(usedPercent) {
+  if (!Number.isFinite(usedPercent)) {
+    return "neutral";
+  }
+
+  if (usedPercent >= 80) {
+    return "danger";
+  }
+
+  if (usedPercent >= 60) {
+    return "warn";
+  }
+
+  return "good";
+}
+
+function appendCtxSegments(segments, ctxModel, style) {
+  const severity = getCtxSeverity(ctxModel.usedPercent);
+  const percentText = `${ctxModel.usedPercent}%`;
+
+  if (style === "bar") {
+    const bar = buildBar(ctxModel.usedPercent, undefined, 6);
+    return [
+      ...segments,
+      { text: " | ctx ", tone: "muted" },
+      { text: bar.filledText, tone: severity },
+      { text: bar.emptyText, tone: "barEmpty" },
+      { text: " ", tone: "plain" },
+      { text: percentText, tone: severity }
+    ];
+  }
+
+  return [
+    ...segments,
+    { text: " | ctx ", tone: "muted" },
+    { text: percentText, tone: severity }
+  ];
+}
+
 export function formatStatus(result, options = {}) {
+  const theme = normalizeTheme(options.theme);
   const model = buildStatusViewModel(result);
 
   if (model.kind !== "success") {
-    return applyTheme(createErrorSegments(model), {
-      theme: normalizeTheme(options.theme)
-    });
+    return applyTheme(createErrorSegments(model), { theme });
   }
 
   const style = normalizeStatusStyle(options.style);
@@ -172,7 +210,9 @@ export function formatStatus(result, options = {}) {
     segments = createTextSegments(model, options.displayMode);
   }
 
-  return applyTheme(segments, {
-    theme: normalizeTheme(options.theme)
-  });
+  if (options.ctxModel) {
+    segments = appendCtxSegments(segments, options.ctxModel, style);
+  }
+
+  return applyTheme(segments, { theme });
 }
