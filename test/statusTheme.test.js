@@ -77,7 +77,7 @@ test("dark theme colors the bar without changing visible text", () => {
   const bar = buildBar(18);
 
   assert.match(output, /\u001b\[/);
-  assert.match(output, /\u001b\[36m14:47\u001b\[0m/);
+  assert.match(output, /\u001b\[38;2;119;209;208m14:47\u001b\[0m/);
   assert.equal(stripAnsi(output), `GLM Lite ${bar.filledText}${bar.emptyText} 18% | 14:47`);
 });
 
@@ -142,8 +142,8 @@ test("light theme uses blue accents without changing visible text", () => {
   );
 
   assert.match(output, /\u001b\[/);
-  assert.match(output, /\u001b\[34mGLM Lite\u001b\[0m/);
-  assert.match(output, /\u001b\[34m14:47\u001b\[0m/);
+  assert.match(output, /\u001b\[38;2;34;95;120mGLM Lite\u001b\[0m/);
+  assert.match(output, /\u001b\[38;2;34;95;120m14:47\u001b\[0m/);
   assert.equal(stripAnsi(output), "GLM Lite | 5h 47% | reset 14:47");
 });
 

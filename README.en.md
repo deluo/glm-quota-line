@@ -66,8 +66,8 @@ glm-quota-line config set style compact
 
 | Value | Description |
 |---|---|
-| `dark` (default) | Dark terminal, strongest color contrast |
-| `light` | White/light terminal, blue-tinted accents |
+| `dark` (default) | Dark terminal, light pine-green accents |
+| `light` | White/light terminal, teal-blue accents |
 | `mono` | Grayscale, minimal distraction |
 
 ```bash

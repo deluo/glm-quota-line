@@ -66,8 +66,8 @@ glm-quota-line config set style compact
 
 | 值 | 说明 |
 |---|---|
-| `dark`（默认） | 深色终端，彩色对比最强 |
-| `light` | 浅色/白色终端，蓝调配色 |
+| `dark`（默认） | 深色终端，浅松绿配色 |
+| `light` | 浅色/白色终端，天青蓝配色 |
 | `mono` | 灰阶，极简低干扰 |
 
 ```bash

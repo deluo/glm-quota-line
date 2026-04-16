@@ -11,8 +11,9 @@ const ANSI = {
   black: "\u001b[30m",
   gray: "\u001b[90m",
   white: "\u001b[37m",
-  blue: "\u001b[34m",
+  lightAccent: "\u001b[38;2;34;95;120m",
   cyan: "\u001b[36m",
+  darkAccent: "\u001b[38;2;119;209;208m",
   green: "\u001b[32m",
   yellow: "\u001b[33m",
   red: "\u001b[31m"
@@ -30,7 +31,7 @@ function getDarkCodes(tone) {
   switch (tone) {
     case "label":
     case "reset":
-      return [ANSI.cyan];
+      return [ANSI.darkAccent];
     case "muted":
       return [ANSI.gray];
     case "barEmpty":
@@ -71,7 +72,7 @@ function getLightCodes(tone) {
   switch (tone) {
     case "label":
     case "reset":
-      return [ANSI.blue];
+      return [ANSI.lightAccent];
     case "muted":
       return [ANSI.gray];
     case "barEmpty":
