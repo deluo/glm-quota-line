@@ -155,7 +155,7 @@ glm-quota-line config unset <key>
 
 ## 说明
 
-- 展示 `TOKENS_LIMIT` 配额和 `MCP_LIMIT` 配额，忽略 `TIME_LIMIT`
+- 展示 `TOKENS_LIMIT` 配额和 `MCP_LIMIT` / `TIME_LIMIT` 配额
 - 状态栏默认显示上下文窗口用量，可通过 `--ctx off` 或 `config set ctx off` 关闭
 - 鉴权缺失返回 `GLM | auth expired`；接口异常返回 `GLM | quota unavailable`
 - `install` 默认不会覆盖非本工具管理的状态栏，除非使用 `--force`

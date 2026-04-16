@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1
+
+- Fixed MCP quota not displaying when API returns `TIME_LIMIT` type instead of `MCP_LIMIT`
+- Updated severity colors: good `#4694AF`, warn `#FF8200`, danger `#DC3513`
+
 ## 1.1.0
 
 - Added MCP quota extraction from API response (`MCP_LIMIT` type), shown in CLI query output alongside token quotas

@@ -153,6 +153,54 @@ test("parser extracts MCP data with remaining/currentValue fields", () => {
   assert.equal(result.mcp.leftPercent, 70);
 });
 
+test("parser extracts MCP data from TIME_LIMIT type entry", () => {
+  const response = {
+    kind: "response",
+    status: 200,
+    json: {
+      code: 200,
+      msg: "操作成功",
+      success: true,
+      data: {
+        level: "lite",
+        limits: [
+          {
+            type: "TOKENS_LIMIT",
+            unit: 3,
+            number: 5,
+            percentage: 30,
+            nextResetTime: 1776352324538
+          },
+          {
+            type: "TIME_LIMIT",
+            unit: 5,
+            number: 1,
+            usage: 100,
+            currentValue: 100,
+            remaining: 0,
+            percentage: 100,
+            nextResetTime: 1777518607998,
+            usageDetails: [
+              { modelCode: "search-prime", usage: 59 },
+              { modelCode: "web-reader", usage: 33 },
+              { modelCode: "zread", usage: 8 }
+            ]
+          }
+        ]
+      }
+    },
+    text: "{}"
+  };
+
+  const result = parseQuotaResponse(response);
+  assert.equal(result.kind, "success");
+  assert.ok(result.mcp);
+  assert.equal(result.mcp.key, "mcp");
+  assert.equal(result.mcp.leftPercent, 0);
+  assert.equal(result.mcp.usedPercent, 100);
+  assert.equal(result.mcp.nextResetTime, 1777518607998);
+});
+
 // ── formatQueryHuman ────────────────────────────────────────────
 
 test("formatQueryHuman shows left mode with full date and MCP", () => {

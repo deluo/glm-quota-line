@@ -155,7 +155,7 @@ Run `glm-quota-line --help` for full descriptions.
 
 ## Notes
 
-- Shows `TOKENS_LIMIT` and `MCP_LIMIT` quotas; `TIME_LIMIT` is ignored
+- Shows `TOKENS_LIMIT` and `MCP_LIMIT` / `TIME_LIMIT` quotas
 - Context window usage is shown by default; disable with `--ctx off` or `config set ctx off`
 - Missing auth returns `GLM | auth expired`; API failures return `GLM | quota unavailable`
 - `install` does not replace an unmanaged status line unless `--force` is used

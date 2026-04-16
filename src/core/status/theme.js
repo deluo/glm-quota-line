@@ -14,9 +14,9 @@ const ANSI = {
   lightAccent: "\u001b[38;2;34;95;120m",
   cyan: "\u001b[36m",
   darkAccent: "\u001b[38;2;119;209;208m",
-  green: "\u001b[32m",
-  yellow: "\u001b[33m",
-  red: "\u001b[31m"
+  green: "\u001b[38;2;70;148;175m",
+  yellow: "\u001b[38;2;255;130;0m",
+  red: "\u001b[38;2;220;53;19m"
 };
 
 function applyCodes(text, codes) {

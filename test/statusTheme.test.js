@@ -192,19 +192,19 @@ test("ctx severity colors: good below 60%, warn at 60%, danger at 80%", () => {
     { kind: "success", level: "lite", display: "percent", leftPercent: 80, usedPercent: 20 },
     { style: "text", theme: "dark", ctxModel: { usedPercent: 30, remainingPercent: 70 } }
   );
-  assert.match(good, /\u001b\[32m30%\u001b\[0m/);
+  assert.match(good, /\u001b\[38;2;70;148;175m30%\u001b\[0m/);
 
   const warn = formatStatus(
     { kind: "success", level: "lite", display: "percent", leftPercent: 80, usedPercent: 20 },
     { style: "text", theme: "dark", ctxModel: { usedPercent: 65, remainingPercent: 35 } }
   );
-  assert.match(warn, /\u001b\[33m65%\u001b\[0m/);
+  assert.match(warn, /\u001b\[38;2;255;130;0m65%\u001b\[0m/);
 
   const danger = formatStatus(
     { kind: "success", level: "lite", display: "percent", leftPercent: 80, usedPercent: 20 },
     { style: "text", theme: "dark", ctxModel: { usedPercent: 85, remainingPercent: 15 } }
   );
-  assert.match(danger, /\u001b\[31m85%\u001b\[0m/);
+  assert.match(danger, /\u001b\[38;2;220;53;19m85%\u001b\[0m/);
 });
 
 test("ctx model is skipped when not provided", () => {

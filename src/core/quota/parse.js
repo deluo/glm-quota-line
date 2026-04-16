@@ -140,7 +140,7 @@ function pickPrimaryAndSecondaryTokenLimits(limits) {
 
 function buildMcpQuota(limits) {
   const mcpLimit = limits.find(
-    (limit) => limit?.type === "MCP_LIMIT"
+    (limit) => limit?.type === "MCP_LIMIT" || limit?.type === "TIME_LIMIT"
   );
 
   if (!mcpLimit) {
