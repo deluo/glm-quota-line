@@ -155,7 +155,7 @@ function buildMcpQuota(limits) {
   const nextResetTime = asFiniteNumber(mcpLimit?.nextResetTime);
 
   return {
-    key: "mcp",
+    key: "mcp_monthly",
     leftPercent: percentages.leftPercent,
     usedPercent: percentages.usedPercent,
     ...(nextResetTime !== null ? { nextResetTime } : {})
@@ -217,7 +217,10 @@ export function parseQuotaResponse(response) {
   }
 
   const primaryQuota = quotas[0];
-  const mcp = buildMcpQuota(limits);
+  const mcpQuota = buildMcpQuota(limits);
+  if (mcpQuota) {
+    quotas.push(mcpQuota);
+  }
 
   return {
     kind: "success",
@@ -229,7 +232,6 @@ export function parseQuotaResponse(response) {
       ? { nextResetTime: primaryQuota.nextResetTime }
       : {}),
     primaryQuotaKey: primaryQuota.key,
-    quotas,
-    ...(mcp ? { mcp } : {})
+    quotas
   };
 }

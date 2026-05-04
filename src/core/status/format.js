@@ -35,16 +35,39 @@ function createQuotaTextSegments(quota, displayMode, tone) {
   ];
 }
 
-function appendSecondarySegments(segments, model) {
+function appendSecondarySegments(segments, model, displayMode) {
   if (!model.secondaryQuota) {
     return segments;
   }
 
+  const mode = normalizeDisplayMode(displayMode);
+  const metric = mode === "used"
+    ? { text: model.secondaryQuota.usedText }
+    : { text: model.secondaryQuota.leftText };
+
   return [
     ...segments,
     { text: " | ", tone: "muted" },
-    { text: `${model.secondaryQuota.label} `, tone: "muted" },
-    { text: model.secondaryQuota.leftText, tone: "plain" }
+    { text: `${model.secondaryQuota.compactLabel} `, tone: "muted" },
+    { text: metric.text, tone: "plain" }
+  ];
+}
+
+function appendMcpSegments(segments, model, displayMode) {
+  if (!model.mcpQuota) {
+    return segments;
+  }
+
+  const mode = normalizeDisplayMode(displayMode);
+  const metric = mode === "used"
+    ? { text: model.mcpQuota.usedText }
+    : { text: model.mcpQuota.leftText };
+
+  return [
+    ...segments,
+    { text: " | ", tone: "muted" },
+    { text: `${model.mcpQuota.compactLabel} `, tone: "muted" },
+    { text: metric.text, tone: "plain" }
   ];
 }
 
@@ -55,7 +78,7 @@ function appendResetSegments(segments, model) {
 
   return [
     ...segments,
-    { text: " | reset ", tone: "muted" },
+    { text: " | ", tone: "muted" },
     { text: model.resetText, tone: "reset" }
   ];
 }
@@ -64,36 +87,62 @@ function createTextSegments(model, displayMode) {
   const severityTone = model.severity;
 
   return appendResetSegments(
-    appendSecondarySegments(
-      [
-        { text: model.levelLabel, tone: "label" },
-        { text: " | ", tone: "muted" },
-        ...createQuotaTextSegments(model.primaryQuota, displayMode, severityTone)
-      ],
-      model
+    appendMcpSegments(
+      appendSecondarySegments(
+        [
+          { text: model.levelLabel, tone: "label" },
+          { text: " | ", tone: "muted" },
+          ...createQuotaTextSegments(model.primaryQuota, displayMode, severityTone)
+        ],
+        model,
+        displayMode
+      ),
+      model,
+      displayMode
     ),
     model
   );
 }
 
-function createCompactSegments(model) {
+function createCompactSegments(model, displayMode) {
   const severityTone = model.severity;
+  const mode = normalizeDisplayMode(displayMode);
   let segments;
 
+  const primaryMetric = mode === "used" ? model.primaryQuota.usedText : model.primaryQuota.leftText;
+
   if (model.secondaryQuota) {
+    const secondaryMetric = mode === "used" ? model.secondaryQuota.usedText : model.secondaryQuota.leftText;
     segments = [
       { text: `${model.compactLabel} `, tone: "label" },
       { text: `${model.primaryQuota.compactLabel} `, tone: "muted" },
-      { text: model.primaryQuota.leftText, tone: severityTone },
+      { text: primaryMetric, tone: severityTone },
       { text: " ", tone: "plain" },
       { text: `${model.secondaryQuota.compactLabel} `, tone: "muted" },
-      { text: model.secondaryQuota.leftText, tone: "plain" }
+      { text: secondaryMetric, tone: "plain" }
     ];
   } else {
     segments = [
       { text: `${model.compactLabel} `, tone: "label" },
-      { text: model.primaryQuota.leftText, tone: severityTone }
+      { text: primaryMetric, tone: severityTone }
     ];
+  }
+
+  if (model.mcpQuota) {
+    const mcpMetric = mode === "used" ? model.mcpQuota.usedText : model.mcpQuota.leftText;
+    if (model.secondaryQuota) {
+      segments.push(
+        { text: " ", tone: "plain" },
+        { text: `${model.mcpQuota.compactLabel} `, tone: "muted" },
+        { text: mcpMetric, tone: "plain" }
+      );
+    } else {
+      segments.push(
+        { text: " ", tone: "plain" },
+        { text: `${model.mcpQuota.compactLabel} `, tone: "muted" },
+        { text: mcpMetric, tone: "plain" }
+      );
+    }
   }
 
   if (model.resetText) {
@@ -138,10 +187,22 @@ function createBarSegments(model, displayMode) {
   ];
 
   if (model.secondaryQuota) {
+    const mode = normalizeDisplayMode(displayMode);
+    const secondaryMetric = mode === "used" ? model.secondaryQuota.usedText : model.secondaryQuota.leftText;
     segments.push(
       { text: " | ", tone: "muted" },
       { text: `${model.secondaryQuota.compactLabel} `, tone: "muted" },
-      { text: model.secondaryQuota.leftText, tone: "plain" }
+      { text: secondaryMetric, tone: "plain" }
+    );
+  }
+
+  if (model.mcpQuota) {
+    const mode = normalizeDisplayMode(displayMode);
+    const mcpMetric = mode === "used" ? model.mcpQuota.usedText : model.mcpQuota.leftText;
+    segments.push(
+      { text: " | ", tone: "muted" },
+      { text: `${model.mcpQuota.compactLabel} `, tone: "muted" },
+      { text: mcpMetric, tone: "plain" }
     );
   }
 
@@ -203,7 +264,7 @@ export function formatStatus(result, options = {}) {
   let segments;
 
   if (style === "compact") {
-    segments = createCompactSegments(model);
+    segments = createCompactSegments(model, options.displayMode);
   } else if (style === "bar") {
     segments = createBarSegments(model, options.displayMode);
   } else {

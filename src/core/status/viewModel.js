@@ -6,7 +6,8 @@ function padTwoDigits(value) {
 
 const QUOTA_LABELS = {
   token_5h: { text: "5h", compact: "5h" },
-  token_week: { text: "week", compact: "W" }
+  token_week: { text: "week", compact: "W" },
+  mcp_monthly: { text: "MCP", compact: "M" }
 };
 
 function formatLevel(level) {
@@ -113,7 +114,8 @@ export function buildStatusViewModel(result) {
     quotas.find((quota) => quota.key === result.primaryQuotaKey) ||
     quotas.find((quota) => quota.key === "token_5h") ||
     quotas[0];
-  const secondaryQuota = quotas.find((quota) => quota !== primaryQuota) || null;
+  const secondaryQuota = quotas.find((quota) => quota !== primaryQuota && quota.key !== "mcp_monthly") || null;
+  const mcpQuota = quotas.find((quota) => quota.key === "mcp_monthly") || null;
 
   return {
     kind: "success",
@@ -121,6 +123,7 @@ export function buildStatusViewModel(result) {
     compactLabel: "GLM",
     primaryQuota,
     secondaryQuota,
+    mcpQuota,
     leftPercent: primaryQuota.leftPercent,
     usedPercent: primaryQuota.usedPercent,
     resetText: formatResetTime(primaryQuota.nextResetTime),
