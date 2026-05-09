@@ -16,7 +16,6 @@ export function createQuotaConfig(cacheFilePath, authorization = "token") {
     quotaUrl: "https://bigmodel.cn/api/monitor/usage/quota/limit",
     authorization,
     timeoutMs: 5000,
-    cacheTtlMs: 600_000,
     cacheFilePath
   };
 }

@@ -255,12 +255,12 @@ test("formatQueryHuman handles auth error", () => {
   assert.equal(output, "GLM | auth expired\n");
 });
 
-test("formatQueryHuman handles unavailable", () => {
+test("formatQueryHuman returns error for unavailable", () => {
   const output = formatQueryHuman({ kind: "unavailable" }, "left");
   assert.equal(output, "GLM | quota unavailable\n");
 });
 
-test("formatQueryHuman handles null result", () => {
+test("formatQueryHuman returns error for null result", () => {
   const output = formatQueryHuman(null, "left");
   assert.equal(output, "GLM | quota unavailable\n");
 });

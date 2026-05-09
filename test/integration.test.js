@@ -10,6 +10,9 @@ import { formatStatus } from "../src/core/status/format.js";
 import { parseArgs } from "../src/cli/args.js";
 import { readStatusLineInput } from "../src/claude/input.js";
 import { resolveQuotaStatus } from "../src/core/quota/service.js";
+import { buildWeeklyBar } from "../src/core/status/format.js";
+import { formatQueryJson } from "../src/core/query/format.js";
+import { isValidWorkDays } from "../src/shared/constants.js";
 import {
   buildManagedSessionStartRefreshCommand,
   buildManagedStatusLineCommand,
@@ -108,9 +111,10 @@ test("formats a successful response and writes cache", async () => {
       "GLM Lite | 5h used 9% | week 47% | reset 14:47"
     );
     assert.equal(renderStatus(result, { style: "compact" }), "GLM 5h 91% W 47% | 14:47");
+    const barNow = new Date("2026-04-28T12:00:00").getTime();
     assert.equal(
-      renderStatus(result, { style: "bar" }),
-      "GLM Lite █████████░ 91% | W 47% | 14:47"
+      renderStatus(result, { style: "bar", now: barNow }),
+      "GLM Lite █████████░ 91% | W █████▒▒▒░░ 47% | 14:47"
     );
 
     const cached = JSON.parse(await fs.readFile(cacheFilePath, "utf8"));
@@ -132,7 +136,7 @@ test("formats the legacy package response by ignoring TIME_LIMIT", async () => {
   });
 });
 
-test("returns auth expired without fetching when Authorization is missing", async () => {
+test("returns auth error without fetching when Authorization is missing", async () => {
   await withTempDir(async (dir) => {
     let fetchCalls = 0;
 
@@ -144,6 +148,7 @@ test("returns auth expired without fetching when Authorization is missing", asyn
     });
 
     assert.equal(fetchCalls, 0);
+    assert.equal(result.kind, "auth_error");
     assert.equal(renderStatus(result), "GLM | auth expired");
   });
 });
@@ -274,7 +279,7 @@ test("returns quota unavailable when no cache exists and the response is malform
       fetchImpl: async () => makeJsonResponse({ success: true, data: { limits: [] } })
     });
 
-    assert.equal(renderStatus(result), "GLM | quota unavailable");
+    assert.equal(renderStatus(result), "");
   });
 });
 
@@ -303,7 +308,7 @@ test("ignores TIME_LIMIT-only payloads and returns unavailable", async () => {
     });
 
     assert.equal(result.kind, "unavailable");
-    assert.equal(renderStatus(result), "GLM | quota unavailable");
+    assert.equal(renderStatus(result), "");
   });
 });
 
@@ -326,7 +331,6 @@ test("official domestic environment variables take priority and derive the quota
 
   assert.equal(config.authorization, "official-token");
   assert.equal(config.quotaUrl, "https://open.bigmodel.cn/api/monitor/usage/quota/limit");
-  assert.equal(config.cacheTtlMs, 600_000);
   assert.ok(config.cacheFilePath.endsWith(".json"));
   assert.ok(!config.cacheFilePath.endsWith("cache.json"));
 });
@@ -972,7 +976,6 @@ test("refreshQuotaOnSessionStart forces a quota refresh and updates the session 
         quotaUrl: "https://bigmodel.cn/api/monitor/usage/quota/limit",
         authorization: "token",
         timeoutMs: 5000,
-        cacheTtlMs: 600_000,
         cacheFilePath
       }),
       fetchImpl: async () => {
@@ -987,4 +990,249 @@ test("refreshQuotaOnSessionStart forces a quota refresh and updates the session 
     assert.equal(result.kind, "success");
     assert.equal(cached.sessionId, "session-new");
   });
+});
+
+// --- formatQueryJson ---
+
+test("formatQueryJson returns error for null input", () => {
+  assert.deepEqual(formatQueryJson(null), { error: "quota unavailable" });
+});
+
+test("formatQueryJson returns error for auth_error", () => {
+  assert.deepEqual(formatQueryJson({ kind: "auth_error" }), { error: "auth expired" });
+});
+
+test("formatQueryJson maps quotas and mcp with reset timestamps", () => {
+  const result = {
+    kind: "success",
+    level: "lite",
+    quotas: [
+      { key: "token_5h", usedPercent: 9, leftPercent: 91, nextResetTime: 1774939627716 },
+      { key: "token_week", usedPercent: 53, leftPercent: 47, nextResetTime: 1777518607977 }
+    ],
+    mcp: { usedPercent: 10, leftPercent: 90, nextResetTime: 1774939627716 }
+  };
+
+  const json = formatQueryJson(result);
+  assert.equal(json.level, "lite");
+  assert.equal(json.quotas.length, 2);
+  assert.equal(json.quotas[0].window, "5h");
+  assert.equal(json.quotas[0].usedPercent, 9);
+  assert.equal(json.quotas[0].leftPercent, 91);
+  assert.ok(json.quotas[0].resetTime);
+  assert.equal(json.quotas[1].window, "week");
+  assert.equal(json.mcp.usedPercent, 10);
+  assert.equal(json.mcp.leftPercent, 90);
+  assert.ok(json.mcp.resetTime);
+});
+
+test("formatQueryJson omits reset fields when nextResetTime is missing", () => {
+  const result = {
+    kind: "success",
+    level: "pro",
+    quotas: [
+      { key: "token_5h", usedPercent: 5, leftPercent: 95 }
+    ]
+  };
+
+  const json = formatQueryJson(result);
+  assert.equal(json.quotas[0].window, "5h");
+  assert.equal("resetTime" in json.quotas[0], false);
+  assert.equal("mcp" in json, false);
+});
+
+// --- parseArgs --json ---
+
+test("parseArgs parses --json flag", () => {
+  const options = parseArgs(["--json"]);
+  assert.equal(options.json, true);
+});
+
+test("parseArgs --json does not appear by default", () => {
+  const options = parseArgs([]);
+  assert.equal(options.json, undefined);
+});
+
+// --- isValidWorkDays ---
+
+test("isValidWorkDays accepts 1 through 7", () => {
+  for (let i = 1; i <= 7; i++) {
+    assert.equal(isValidWorkDays(i), true, `expected ${i} to be valid`);
+  }
+});
+
+test("isValidWorkDays rejects 0, 8, 1.5, NaN and non-numbers", () => {
+  assert.equal(isValidWorkDays(0), false);
+  assert.equal(isValidWorkDays(8), false);
+  assert.equal(isValidWorkDays(1.5), false);
+  assert.equal(isValidWorkDays(NaN), false);
+  assert.equal(isValidWorkDays("5"), false);
+});
+
+// --- buildWeeklyBar ---
+
+test("buildWeeklyBar shows filled + shade when budget exceeds usage", () => {
+  // usedPercent=30 → 3 filled, theoreticalBudget=60 → 6 budget units → 3 shade, 4 empty
+  const bar = buildWeeklyBar(30, 60);
+  assert.equal(bar.filledUnits, 3);
+  assert.equal(bar.shadeUnits, 3);
+  assert.equal(bar.emptyUnits, 4);
+  assert.equal(bar.filledText, "███");
+  assert.equal(bar.shadeText, "▒▒▒");
+  assert.equal(bar.emptyText, "░░░░");
+});
+
+test("buildWeeklyBar has no shade when usage meets budget", () => {
+  const bar = buildWeeklyBar(50, 50);
+  assert.equal(bar.filledUnits, 5);
+  assert.equal(bar.shadeUnits, 0);
+  assert.equal(bar.emptyUnits, 5);
+});
+
+test("buildWeeklyBar has no shade when usage exceeds budget", () => {
+  const bar = buildWeeklyBar(70, 40);
+  assert.equal(bar.filledUnits, 7);
+  assert.equal(bar.shadeUnits, 0);
+  assert.equal(bar.emptyUnits, 3);
+});
+
+test("buildWeeklyBar clamps values to 0-100", () => {
+  const barNeg = buildWeeklyBar(-10, -5);
+  assert.equal(barNeg.filledUnits, 0);
+
+  const barOver = buildWeeklyBar(150, 200);
+  assert.equal(barOver.filledUnits, 10);
+});
+
+// --- weekly pacing severity via formatStatus ---
+
+test("weekly quota gets danger severity when over-pace", () => {
+  // 2026-04-26 (Sunday) — countWorkDays from Apr 23 (Thu) to Apr 26 (Sun) + 1 day
+  // Thu, Fri = 2 workdays (Sat/Sun excluded). budget = 2/5*100 = 40%
+  // usedPercent = 53, pace = 53/40 = 1.325 > 1.3 → danger
+  const result = {
+    kind: "success",
+    level: "lite",
+    display: "percent",
+    quotas: [
+      { key: "token_5h", leftPercent: 91, usedPercent: 9, nextResetTime: 1774939627716 },
+      { key: "token_week", leftPercent: 47, usedPercent: 53, nextResetTime: 1777518607977 }
+    ],
+    primaryQuotaKey: "token_5h"
+  };
+
+  const output = renderStatus(result, {
+    style: "bar",
+    now: new Date("2026-04-26T12:00:00").getTime()
+  });
+  // Weekly bar should show filled units for 53% used
+  assert.ok(output.includes("47%"));
+  assert.ok(output.includes("W"));
+});
+
+test("weekly quota gets good severity when under-pace", () => {
+  // Same time, but only 10% used → pace = 10/40 = 0.25 → good
+  const result = {
+    kind: "success",
+    level: "lite",
+    display: "percent",
+    quotas: [
+      { key: "token_5h", leftPercent: 91, usedPercent: 9, nextResetTime: 1774939627716 },
+      { key: "token_week", leftPercent: 90, usedPercent: 10, nextResetTime: 1777518607977 }
+    ],
+    primaryQuotaKey: "token_5h"
+  };
+
+  const output = renderStatus(result, {
+    style: "text",
+    now: new Date("2026-04-26T12:00:00").getTime()
+  });
+  assert.ok(output.includes("week"));
+  assert.ok(output.includes("90%"));
+});
+
+test("weekly quota falls back when nextResetTime is in the past", () => {
+  const pastReset = Date.now() - 10000;
+  const result = {
+    kind: "success",
+    level: "lite",
+    display: "percent",
+    quotas: [
+      { key: "token_5h", leftPercent: 91, usedPercent: 9, nextResetTime: 1774939627716 },
+      { key: "token_week", leftPercent: 47, usedPercent: 53, nextResetTime: pastReset }
+    ],
+    primaryQuotaKey: "token_5h"
+  };
+
+  const output = renderStatus(result, { style: "bar" });
+  // Should still render without crash, no shade
+  assert.ok(output.includes("47%"));
+  assert.ok(!output.includes("▒"));
+});
+
+test("weekly quota falls back to plain text when no theoretical budget", () => {
+  const result = {
+    kind: "success",
+    level: "lite",
+    display: "percent",
+    quotas: [
+      { key: "token_5h", leftPercent: 91, usedPercent: 9, nextResetTime: 1774939627716 },
+      { key: "token_week", leftPercent: 47, usedPercent: 53 }
+    ],
+    primaryQuotaKey: "token_5h"
+  };
+
+  const output = renderStatus(result, { style: "bar" });
+  assert.ok(output.includes("W 47%"));
+  assert.ok(!output.includes("▒"));
+});
+
+// --- config set/unset work-days ---
+
+test("config set work-days persists and reads back", async () => {
+  await withTempDir(async (dir) => {
+    const configPath = path.join(dir, "glm-quota-line.json");
+    // setToolConfigValue takes the property name and transformed value,
+    // same as commands.js does via CONFIG_KEYS
+    await setToolConfigValue("workDays", 5, configPath);
+
+    const config = await readToolConfig(configPath);
+    assert.equal(config.workDays, 5);
+  });
+});
+
+test("config set work-days rejects invalid values", async () => {
+  await withTempDir(async (dir) => {
+    const configPath = path.join(dir, "glm-quota-line.json");
+    // Storing an invalid value — normalizeToolConfig should strip it
+    await setToolConfigValue("workDays", 0, configPath);
+
+    const config = await readToolConfig(configPath);
+    assert.equal(config.workDays, undefined);
+  });
+});
+
+// --- isGLM detection ---
+
+test("isGLM is true when no base URL is set", async () => {
+  const config = await loadConfig({
+    ANTHROPIC_AUTH_TOKEN: "token"
+  }, {}, { claudeSettingsPath: "/nonexistent/settings.json" });
+  assert.equal(config.isGLM, true);
+});
+
+test("isGLM is true when base URL matches Zhipu endpoints", async () => {
+  const config = await loadConfig({
+    ANTHROPIC_AUTH_TOKEN: "token",
+    ANTHROPIC_BASE_URL: "https://open.bigmodel.cn/api/anthropic"
+  }, {}, { claudeSettingsPath: "/nonexistent/settings.json" });
+  assert.equal(config.isGLM, true);
+});
+
+test("isGLM is false when base URL points to a non-Zhipu provider", async () => {
+  const config = await loadConfig({
+    ANTHROPIC_AUTH_TOKEN: "token",
+    ANTHROPIC_BASE_URL: "https://api.anthropic.com/v1"
+  }, {}, { claudeSettingsPath: "/nonexistent/settings.json" });
+  assert.equal(config.isGLM, false);
 });

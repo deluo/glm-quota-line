@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { formatStatus } from "../src/core/status/format.js";
-import { buildBar } from "../src/core/status/bar.js";
+import { buildBar } from "../src/core/status/format.js";
 import { buildStatusViewModel } from "../src/core/status/viewModel.js";
 import { STATUS_BAR_CHARACTERS } from "../src/shared/constants.js";
 
@@ -160,6 +160,26 @@ test("ctx model appends context usage segment in text style", () => {
     {
       style: "text",
       theme: "dark",
+      ctxModel: { usedPercent: 45, remainingPercent: 55, modelId: "glm-5.1", windowSize: 200000 }
+    }
+  );
+
+  assert.equal(stripAnsi(output), "GLM Lite | 5h 80% | reset 14:47 | ctx 45% (glm-5.1/200K)");
+});
+
+test("ctx model without model info falls back to plain display", () => {
+  const output = formatStatus(
+    {
+      kind: "success",
+      level: "lite",
+      display: "percent",
+      leftPercent: 80,
+      usedPercent: 20,
+      nextResetTime: 1774939627716
+    },
+    {
+      style: "text",
+      theme: "dark",
       ctxModel: { usedPercent: 45, remainingPercent: 55 }
     }
   );
@@ -180,11 +200,11 @@ test("ctx model appends context bar segment in bar style", () => {
     {
       style: "bar",
       theme: "dark",
-      ctxModel: { usedPercent: 50, remainingPercent: 50 }
+      ctxModel: { usedPercent: 50, remainingPercent: 50, modelId: "glm-4.7", windowSize: 200000 }
     }
   );
 
-  assert.equal(stripAnsi(output), "GLM Lite ████████░░ 80% | 14:47 | ctx ███░░░ 50%");
+  assert.equal(stripAnsi(output), "GLM Lite ████████░░ 80% | 14:47 | ctx ███░░░ 50% (glm-4.7/200K)");
 });
 
 test("ctx severity colors: good below 60%, warn at 60%, danger at 80%", () => {

@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { asFiniteNumber } from "./parse.js";
+import { asFiniteNumber } from "../../shared/utils.js";
 
 function isValidQuotaShape(value) {
   if (!value || typeof value.key !== "string") {

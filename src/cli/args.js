@@ -9,6 +9,26 @@ function takeValue(args, index) {
   return next ?? "";
 }
 
+const FLAGS = [
+  { names: ["--style"], dest: "style" },
+  { names: ["--display"], dest: "displayMode" },
+  { names: ["--theme"], dest: "theme" },
+  {
+    names: ["--ctx"],
+    dest: "ctxEnabled",
+    parse(value) {
+      if (value !== "on" && value !== "off") {
+        return { error: "Error: --ctx requires on or off\n" };
+      }
+      return { value: value === "on" };
+    }
+  },
+  { names: ["--force"], dest: "force", boolean: true },
+  { names: ["--json"], dest: "json", boolean: true },
+  { names: ["--help", "-h"], dest: "help", boolean: true },
+  { names: ["--version", "-v"], dest: "version", boolean: true }
+];
+
 export function parseArgs(argv = process.argv.slice(2)) {
   const options = {};
   const positionals = [];
@@ -21,57 +41,44 @@ export function parseArgs(argv = process.argv.slice(2)) {
       continue;
     }
 
-    if (arg === "--help" || arg === "-h") {
-      options.help = true;
-      continue;
-    }
+    let matched = false;
+    for (const flag of FLAGS) {
+      const isMatch = flag.names.some(
+        (name) => arg === name || arg.startsWith(`${name}=`)
+      );
+      if (!isMatch) {
+        continue;
+      }
 
-    if (arg === "--version" || arg === "-v") {
-      options.version = true;
-      continue;
-    }
+      matched = true;
 
-    if (arg === "--force") {
-      options.force = true;
-      continue;
-    }
+      if (flag.boolean) {
+        options[flag.dest] = true;
+        break;
+      }
 
-    if (arg === "--style" || arg.startsWith("--style=")) {
-      options.style = takeValue(argv, index);
+      const rawValue = takeValue(argv, index);
       if (!arg.includes("=")) {
         index += 1;
       }
-      continue;
+
+      if (flag.parse) {
+        const result = flag.parse(rawValue);
+        if (result.error) {
+          process.stderr.write(result.error);
+          process.exitCode = 1;
+          options.positionals = positionals;
+          return options;
+        }
+        options[flag.dest] = result.value;
+      } else {
+        options[flag.dest] = rawValue;
+      }
+      break;
     }
 
-    if (arg === "--display" || arg.startsWith("--display=")) {
-      options.displayMode = takeValue(argv, index);
-      if (!arg.includes("=")) {
-        index += 1;
-      }
-      continue;
-    }
-
-    if (arg === "--theme" || arg.startsWith("--theme=")) {
-      options.theme = takeValue(argv, index);
-      if (!arg.includes("=")) {
-        index += 1;
-      }
-      continue;
-    }
-
-    if (arg === "--ctx" || arg.startsWith("--ctx=")) {
-      const val = takeValue(argv, index);
-      if (val !== "on" && val !== "off") {
-        process.stderr.write("Error: --ctx requires on or off\n");
-        process.exitCode = 1;
-        return options;
-      }
-      options.ctxEnabled = val === "on";
-      if (!arg.includes("=")) {
-        index += 1;
-      }
-      continue;
+    if (!matched) {
+      // Unknown flags are ignored to allow forward-compatibility
     }
   }
 

@@ -1,21 +1,10 @@
 import { LOW_QUOTA_THRESHOLD } from "../../shared/constants.js";
-
-function padTwoDigits(value) {
-  return String(value).padStart(2, "0");
-}
+import { asFiniteNumber, formatLevel, padTwoDigits } from "../../shared/utils.js";
 
 const QUOTA_LABELS = {
   token_5h: { text: "5h", compact: "5h" },
   token_week: { text: "week", compact: "W" }
 };
-
-function formatLevel(level) {
-  if (!level) {
-    return "GLM";
-  }
-
-  return `GLM ${level.charAt(0).toUpperCase()}${level.slice(1)}`;
-}
 
 function formatResetTime(timestampMs) {
   if (!Number.isFinite(timestampMs)) {
@@ -44,6 +33,65 @@ function getSeverity(leftPercent) {
   }
 
   return "danger";
+}
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const DEFAULT_WORK_DAYS = 5;
+const PACE_WARN_THRESHOLD = 1.1;
+const PACE_DANGER_THRESHOLD = 1.3;
+
+function countWorkDays(startMs, endMs, totalDays = DEFAULT_WORK_DAYS) {
+  let count = 0;
+  const d = new Date(startMs);
+  d.setHours(0, 0, 0, 0);
+  const end = new Date(endMs);
+  end.setHours(0, 0, 0, 0);
+  // Include the current day as a full work day for pacing calculation
+  end.setDate(end.getDate() + 1);
+  while (d < end) {
+    const dow = d.getDay();
+    const isWorkDay = totalDays >= 7 || (totalDays >= 6 ? dow !== 0 : dow !== 0 && dow !== 6);
+    if (isWorkDay) {
+      count += 1;
+    }
+    d.setDate(d.getDate() + 1);
+  }
+  return count;
+}
+
+function getWeeklyInfo(leftPercent, nextResetTime, workDays, now = Date.now()) {
+  const totalDays = workDays || DEFAULT_WORK_DAYS;
+  const fallback = { severity: getSeverity(leftPercent), theoreticalBudget: null };
+
+  if (!Number.isFinite(leftPercent)) {
+    return { severity: "neutral", theoreticalBudget: null };
+  }
+
+  if (!Number.isFinite(nextResetTime) || nextResetTime <= now) {
+    return fallback;
+  }
+
+  const periodStart = nextResetTime - WEEK_MS;
+  const workDaysElapsed = countWorkDays(periodStart, now, totalDays);
+
+  if (workDaysElapsed <= 0) {
+    return fallback;
+  }
+
+  const theoreticalBudget = workDaysElapsed * (100 / totalDays);
+  const usedPercent = 100 - leftPercent;
+  const pace = usedPercent / theoreticalBudget;
+
+  let severity;
+  if (pace > PACE_DANGER_THRESHOLD) {
+    severity = "danger";
+  } else if (pace > PACE_WARN_THRESHOLD) {
+    severity = "warn";
+  } else {
+    severity = "good";
+  }
+
+  return { severity, theoreticalBudget };
 }
 
 function getQuotaLabels(key) {
@@ -91,7 +139,9 @@ function normalizeQuotasFromResult(result) {
   return [];
 }
 
-export function buildStatusViewModel(result) {
+export function buildStatusViewModel(result, options = {}) {
+  const now = options.now || Date.now();
+
   if (!result || typeof result !== "object") {
     return { kind: "unavailable" };
   }
@@ -115,12 +165,18 @@ export function buildStatusViewModel(result) {
     quotas[0];
   const secondaryQuota = quotas.find((quota) => quota !== primaryQuota) || null;
 
+  const weeklyInfo = secondaryQuota
+    ? getWeeklyInfo(secondaryQuota.leftPercent, secondaryQuota.nextResetTime, options.workDays, now)
+    : { severity: "neutral", theoreticalBudget: null };
+
   return {
     kind: "success",
     levelLabel: formatLevel(result.level),
     compactLabel: "GLM",
     primaryQuota,
     secondaryQuota,
+    secondarySeverity: weeklyInfo.severity,
+    secondaryTheoreticalBudget: weeklyInfo.theoreticalBudget,
     leftPercent: primaryQuota.leftPercent,
     usedPercent: primaryQuota.usedPercent,
     resetText: formatResetTime(primaryQuota.nextResetTime),

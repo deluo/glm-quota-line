@@ -1,7 +1,8 @@
 import {
   isValidDisplayMode,
   isValidStatusStyle,
-  isValidTheme
+  isValidTheme,
+  isValidWorkDays
 } from "../shared/constants.js";
 import {
   getDisplayToolConfig,
@@ -65,6 +66,12 @@ const CONFIG_KEYS = {
     validate: isValidBaseUrl,
     invalidMessage:
       "Invalid base-url. Provide a full URL such as https://open.bigmodel.cn/api/anthropic."
+  },
+  "work-days": {
+    property: "workDays",
+    validate: (v) => isValidWorkDays(parseInt(v, 10)),
+    invalidMessage: "Invalid work-days. Use a number between 1 and 7.",
+    transform: (v) => parseInt(v, 10)
   }
 };
 
@@ -150,7 +157,7 @@ export async function handleCommand(args, output = process.stdout, dependencies 
     const configKey = CONFIG_KEYS[key];
     if (!configKey) {
       process.exitCode = 1;
-      output.write("Supported config keys: style, display, theme, ctx, auth-token, base-url\n");
+      output.write("Supported config keys: style, display, theme, ctx, auth-token, base-url, work-days\n");
       return true;
     }
 
@@ -174,7 +181,7 @@ export async function handleCommand(args, output = process.stdout, dependencies 
     const configKey = CONFIG_KEYS[key];
     if (!configKey) {
       process.exitCode = 1;
-      output.write("Supported config keys: style, display, theme, ctx, auth-token, base-url\n");
+      output.write("Supported config keys: style, display, theme, ctx, auth-token, base-url, work-days\n");
       return true;
     }
 

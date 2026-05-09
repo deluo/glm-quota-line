@@ -69,7 +69,6 @@ test("stored auth token and base url override Claude environment values", async 
   );
 
   assert.equal(config.authorization, "real-token");
-  assert.equal(config.anthropicBaseUrl, "https://open.bigmodel.cn/api/anthropic");
   assert.equal(config.quotaUrl, "https://open.bigmodel.cn/api/monitor/usage/quota/limit");
 });
 

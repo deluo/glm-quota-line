@@ -3,15 +3,11 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { normalizeOptionalString } from "./utils.js";
 import {
-  DEFAULT_CACHE_TTL_MS,
   DEFAULT_CN_BASE_URL,
-  DEFAULT_CTX_ENABLED,
   DEFAULT_INTL_BASE_URL,
-  DEFAULT_DISPLAY_MODE,
   DEFAULT_QUOTA_URL,
-  DEFAULT_STYLE,
-  DEFAULT_THEME,
   DEFAULT_TIMEOUT_MS
 } from "./constants.js";
 
@@ -42,6 +38,25 @@ function getCacheRoot() {
   return process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache");
 }
 
+function isZhipuProvider(baseUrl) {
+  if (!baseUrl) {
+    return true;
+  }
+
+  try {
+    const host = new URL(baseUrl).host;
+    return (
+      host.includes("api.z.ai") ||
+      host.includes("open.bigmodel.cn") ||
+      host.includes("dev.bigmodel.cn") ||
+      host === "bigmodel.cn" ||
+      host.endsWith(".bigmodel.cn")
+    );
+  } catch {
+    return false;
+  }
+}
+
 function deriveQuotaUrl(baseUrl) {
   if (!baseUrl) {
     return "";
@@ -70,14 +85,6 @@ function deriveQuotaUrl(baseUrl) {
   return "";
 }
 
-export function normalizeOptionalString(value) {
-  if (typeof value !== "string") {
-    return "";
-  }
-
-  return value.trim();
-}
-
 export async function loadConfig(env = process.env, overrides = {}, options = {}) {
   const claudeEnv = await readClaudeEnv(options.claudeSettingsPath);
   const anthropicBaseUrl =
@@ -85,6 +92,7 @@ export async function loadConfig(env = process.env, overrides = {}, options = {}
     normalizeOptionalString(env.ANTHROPIC_BASE_URL) ||
     normalizeOptionalString(claudeEnv?.ANTHROPIC_BASE_URL);
   const derivedQuotaUrl = deriveQuotaUrl(anthropicBaseUrl);
+  const isGLM = isZhipuProvider(anthropicBaseUrl);
   const authorization =
     normalizeOptionalString(overrides.authToken) ||
     normalizeOptionalString(env.ANTHROPIC_AUTH_TOKEN) ||
@@ -95,15 +103,10 @@ export async function loadConfig(env = process.env, overrides = {}, options = {}
   const cacheFileName = `cache-${tokenHash}.json`;
 
   return {
-    quotaUrl: derivedQuotaUrl || DEFAULT_QUOTA_URL,
+    isGLM,
+    quotaUrl: isGLM ? (derivedQuotaUrl || DEFAULT_QUOTA_URL) : "",
     authorization,
-    anthropicBaseUrl,
     timeoutMs: DEFAULT_TIMEOUT_MS,
-    cacheTtlMs: DEFAULT_CACHE_TTL_MS,
-    displayMode: DEFAULT_DISPLAY_MODE,
-    style: DEFAULT_STYLE,
-    theme: DEFAULT_THEME,
-    ctxEnabled: DEFAULT_CTX_ENABLED,
     cacheFilePath: path.join(getCacheRoot(), "glm-quota-line", cacheFileName)
   };
 }

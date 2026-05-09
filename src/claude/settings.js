@@ -6,10 +6,11 @@ import {
   TOOL_CONFIG_SCHEMA_VERSION,
   isValidDisplayMode,
   isValidStatusStyle,
-  isValidTheme
+  isValidTheme,
+  isValidWorkDays
 } from "../shared/constants.js";
+import { normalizeOptionalString } from "../shared/utils.js";
 import { readJsonFile, writeJsonFile } from "../shared/jsonFile.js";
-import { normalizeOptionalString } from "../shared/config.js";
 
 function getClaudeDir() {
   return path.join(os.homedir(), ".claude");
@@ -57,6 +58,10 @@ function normalizeToolConfig(config) {
 
   if (typeof base.ctxEnabled === "boolean") {
     normalized.ctxEnabled = base.ctxEnabled;
+  }
+
+  if (isValidWorkDays(base.workDays)) {
+    normalized.workDays = base.workDays;
   }
 
   const authToken = normalizeOptionalString(base.authToken);

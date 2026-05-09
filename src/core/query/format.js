@@ -1,14 +1,11 @@
 import { normalizeDisplayMode } from "../../shared/constants.js";
+import { formatLevel, padTwoDigits } from "../../shared/utils.js";
 
 const WINDOW_LABELS = {
   token_5h: "5h",
   token_week: "Week",
   mcp: "MCP"
 };
-
-function padTwoDigits(value) {
-  return String(value).padStart(2, "0");
-}
 
 function formatFullResetTime(timestampMs) {
   if (!Number.isFinite(timestampMs)) {
@@ -27,14 +24,6 @@ function formatFullResetTime(timestampMs) {
   const min = padTwoDigits(date.getMinutes());
 
   return `${y}-${m}-${d} ${h}:${min}`;
-}
-
-function formatLevel(level) {
-  if (!level) {
-    return "GLM";
-  }
-
-  return `GLM ${level.charAt(0).toUpperCase()}${level.slice(1)}`;
 }
 
 function formatQuotaLine(label, percent, displayMode, resetTime) {

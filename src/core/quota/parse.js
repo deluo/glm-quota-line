@@ -1,6 +1,4 @@
-export function asFiniteNumber(value) {
-  return Number.isFinite(value) ? value : null;
-}
+import { asFiniteNumber, clampPercent } from "../../shared/utils.js";
 
 function isAuthFailureMessage(value) {
   if (typeof value !== "string") {
@@ -16,15 +14,6 @@ function isRateLimitedMessage(value) {
   }
 
   return /rate\s*limit|too many requests|too frequent|frequency|\u9650\u6d41|\u9891\u7387|\u8fc7\u4e8e\u9891\u7e41|\u7a0d\u540e\u518d\u8bd5/i.test(value);
-}
-
-function clampPercent(value) {
-  const percent = asFiniteNumber(value);
-  if (percent === null) {
-    return null;
-  }
-
-  return Math.min(100, Math.max(0, percent));
 }
 
 function computePercentages(limit) {
