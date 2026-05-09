@@ -19,7 +19,9 @@
 
 - **终端快速查询** — 直接运行 `glm-quota-line` 即可在终端查看配额（含 MCP），无需启动 Claude Code
 - **Claude Code 状态栏** — 安装后自动嵌入状态栏，实时显示配额余额、重置时间和上下文窗口用量
-- **进度条可视化** — 默认 bar 风格，一眼看清剩余比例
+- **进度条可视化** — 默认 bar 风格，一眼看清剩余比例；周配额显示理论预算阴影
+- **智能配速分析** — 根据工作日和已过时间计算配额使用速度，超速时自动变色警示
+- **JSON 输出** — 支持 `--json` 参数输出结构化数据，便于脚本调用
 - **智能缓存** — 按会话、TTL 和 token 用量分级刷新；`SessionStart` hook 预刷新，新会话不显示旧数据
 - **国内 + 国际端点** — 自动识别 `open.bigmodel.cn` 和 `api.z.ai`
 - **零依赖** — 无运行时依赖，单一用途
@@ -34,7 +36,7 @@ glm-quota-line install
 安装完成。Claude Code 底部状态栏会自动显示配额：
 
 ```
-GLM Lite █████████░ 91% | W 47% | 14:47 | ctx ███░░░ 45%
+GLM Lite █████████░ 91% | W ▒▒▒▒░░░░░ 47% | 14:47 | ctx ███░░░ 45% (glm-4.7/200K)
 ```
 
 也可以直接在终端运行 `glm-quota-line` 快速查看用量，无需启动 Claude Code。
@@ -54,7 +56,7 @@ glm-quota-line check-update
 
 | 值 | 说明 | 示例 |
 |---|---|---|
-| `bar`（默认） | 进度条可视化 | `GLM Lite █████████░ 91% \| W 47% \| 14:47 \| ctx ███░░░ 45%` |
+| `bar`（默认） | 进度条可视化 | `GLM Lite █████████░ 91% \| W ▒▒▒▒░░░░░ 47% \| 14:47 \| ctx ███░░░ 45%` |
 | `text` | 完整文本 | `GLM Lite \| 5h 91% \| week 47% \| reset 14:47 \| ctx 45%` |
 | `compact` | 紧凑模式 | `GLM 5h 91% W 47% \| 14:47` |
 
@@ -104,11 +106,59 @@ glm-quota-line config set display used
 glm-quota-line config set ctx off
 ```
 
+显示格式：`ctx 45% (glm-4.7/200K)` — 百分比后括号内显示模型 ID 和窗口大小。
+
 上下文用量会根据已用比例自动变色：
 
 - 绿色 — 已用 < 60%
 - 黄色 — 已用 60%–79%
 - 红色 — 已用 >= 80%
+
+### work-days — 每周工作日
+
+设置每周工作日数量（1-7），用于计算周配额的理论预算和配速分析。默认 5 天。
+
+```bash
+glm-quota-line config set work-days 6
+```
+
+配速分析会根据已过工作日计算理论预算，并判断使用速度：
+- 绿色 — 使用速度 ≤ 1.1x 理论值
+- 黄色 — 使用速度 1.1x–1.3x 理论值
+- 红色 — 使用速度 > 1.3x 理论值
+
+### --json — JSON 输出
+
+输出结构化 JSON 格式（仅终端模式，状态栏模式忽略）：
+
+```bash
+glm-quota-line --json
+```
+
+输出示例：
+```json
+{
+  "level": "Lite",
+  "quotas": [
+    {
+      "label": "5h",
+      "leftPercent": 91,
+      "usedPercent": 9,
+      "nextResetTime": 1715257200000
+    },
+    {
+      "label": "week",
+      "leftPercent": 47,
+      "usedPercent": 53,
+      "nextResetTime": 1715744400000
+    }
+  ],
+  "mcp": {
+    "leftPercent": 85,
+    "usedPercent": 15
+  }
+}
+```
 
 ### auth-token / base-url — 自定义鉴权
 
@@ -137,17 +187,19 @@ glm-quota-line config set base-url https://api.z.ai/api/anthropic
 | 浅色终端 | `style=bar`, `theme=light` |
 | 极简工作流 | `style=compact`, `theme=mono` |
 | 关注已用量 | `style=bar`, `display=used` |
+| 脚本调用 | `--json` |
+| 6 天工作制 | `work-days=6` |
 
 ## 命令参考
 
 ```bash
-glm-quota-line [--style text|compact|bar] [--display left|used] [--theme dark|light|mono] [--ctx on|off]
+glm-quota-line [--style text|compact|bar] [--display left|used] [--theme dark|light|mono] [--ctx on|off] [--json]
 glm-quota-line install [--force]
 glm-quota-line uninstall
 glm-quota-line version
 glm-quota-line check-update
 glm-quota-line config show
-glm-quota-line config set <style|display|theme|ctx|auth-token|base-url> <value>
+glm-quota-line config set <style|display|theme|ctx|auth-token|base-url|work-days> <value>
 glm-quota-line config unset <key>
 ```
 
@@ -156,8 +208,11 @@ glm-quota-line config unset <key>
 ## 说明
 
 - 展示 `TOKENS_LIMIT` 配额和 `MCP_LIMIT` / `TIME_LIMIT` 配额
-- 状态栏默认显示上下文窗口用量，可通过 `--ctx off` 或 `config set ctx off` 关闭
+- 周配额进度条中的阴影（▒）表示理论预算，基于 `work-days` 配置计算
+- 状态栏默认显示上下文窗口用量和模型信息，可通过 `--ctx off` 或 `config set ctx off` 关闭
+- 上下文窗口使用率优先从原始 token 数计算，当模型映射不可用时回退到 API 提供的百分比
 - 鉴权缺失返回 `GLM | auth expired`；接口异常返回 `GLM | quota unavailable`
+- 非 GLM 提供商（非智谱 AI 端点）会自动禁用配额查询
 - `install` 默认不会覆盖非本工具管理的状态栏，除非使用 `--force`
 - `install --force` 会备份旧配置，`uninstall` 会在可能时恢复
 

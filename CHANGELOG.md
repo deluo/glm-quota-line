@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.0
+
+- Added `--json` flag for structured JSON output in terminal mode (useful for scripting and automation)
+- Added `work-days` config (1-7) to customize weekly working days for quota pacing calculation
+- Context window now displays model ID and window size (e.g., `glm-4.7 (200K)`)
+- Context window usage is now calculated from raw tokens when model mapping is available
+- Weekly quota bar now shows theoretical budget with shade segments (▒) when pacing data is available
+- Weekly quota severity now uses pacing-based calculation: good (≤1.1x), warn (1.1-1.3x), danger (>1.3x)
+- Added GLM provider detection to disable quota for non-Zhipu API endpoints
+- Consolidated duplicate utility functions into shared `utils.js` module
+
 ## 1.1.1
 
 - Fixed MCP quota not displaying when API returns `TIME_LIMIT` type instead of `MCP_LIMIT`
