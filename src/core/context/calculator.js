@@ -54,6 +54,10 @@ export function isValidPercentages(percentages) {
 
   const { used, remaining } = percentages;
 
+  if (used === null && remaining === null) {
+    return false;
+  }
+
   if (used !== null && !Number.isFinite(used)) {
     return false;
   }
@@ -82,6 +86,10 @@ export function completePercentages(percentages) {
 
   if (used === null && remaining !== null) {
     return { used: 100 - remaining, remaining };
+  }
+
+  if (used !== null && remaining !== null && Math.abs(used + remaining - 100) > 1) {
+    return { used, remaining: 100 - used };
   }
 
   return percentages;

@@ -87,7 +87,7 @@ test("isValidPercentages validates percentage objects", () => {
   assert.equal(isValidPercentages({ used: -1, remaining: 101 }), false);
   assert.equal(isValidPercentages(null), false);
   assert.equal(isValidPercentages({}), false); // undefined values are invalid
-  assert.equal(isValidPercentages({ used: null, remaining: null }), true); // explicit nulls are valid (can be completed)
+  assert.equal(isValidPercentages({ used: null, remaining: null }), false); // both null means no usable data
   assert.equal(isValidPercentages({ used: NaN, remaining: 50 }), false);
 });
 
@@ -366,4 +366,89 @@ test("parseContextInput returns null contextWindowSize when not provided", () =>
   };
   const result = parseContextInput(input);
   assert.equal(result.contextWindowSize, null);
+});
+
+// --- regression tests for audit fixes ---
+
+test("isValidPercentages rejects both used and remaining null", () => {
+  assert.equal(isValidPercentages({ used: null, remaining: null }), false);
+});
+
+test("completePercentages normalizes when sum exceeds 100", () => {
+  const result = completePercentages({ used: 80, remaining: 80 });
+  assert.equal(result.used, 80);
+  assert.equal(result.remaining, 20);
+});
+
+test("completePercentages normalizes when sum is below 99", () => {
+  const result = completePercentages({ used: 30, remaining: 30 });
+  assert.equal(result.used, 30);
+  assert.equal(result.remaining, 70);
+});
+
+test("completePercentages preserves valid pairs within tolerance", () => {
+  const result = completePercentages({ used: 60, remaining: 40 });
+  assert.equal(result.used, 60);
+  assert.equal(result.remaining, 40);
+});
+
+test("completePercentages preserves pairs within ±1 tolerance", () => {
+  const result = completePercentages({ used: 50, remaining: 51 });
+  assert.equal(result.used, 50);
+  assert.equal(result.remaining, 51);
+});
+
+test("getContextData returns null when API percentages are both null", () => {
+  const input = {
+    model: { id: "unknown-model" },
+    context_window: {
+      used_percentage: null,
+      remaining_percentage: null
+    }
+  };
+  const result = getContextData(input);
+  assert.equal(result, null);
+});
+
+test("getContextData resolves windowSize for known models via helper", () => {
+  const input = {
+    model: { id: "glm-4.7" },
+    context_window: {
+      current_usage: { input_tokens: 60000 },
+      used_percentage: 30
+    }
+  };
+  const result = getContextData(input);
+  assert.equal(result.usedPercent, 30);
+  assert.equal(result.windowSize, 200000);
+  assert.equal(result.modelId, "glm-4.7");
+});
+
+test("getContextData uses custom modelMap for windowSize", () => {
+  const input = {
+    model: { id: "custom-model" },
+    context_window: {
+      current_usage: { input_tokens: 50000 },
+      used_percentage: 25
+    }
+  };
+  const result = getContextData(input, {
+    modelMap: { "custom-model": 100000 }
+  });
+  assert.equal(result.usedPercent, 50);
+  assert.equal(result.windowSize, 100000);
+});
+
+test("getContextData uses contextWindowSize override over modelMap", () => {
+  const input = {
+    model: { id: "glm-4.7" },
+    context_window: {
+      context_window_size: 50000,
+      current_usage: { input_tokens: 25000 },
+      used_percentage: 50
+    }
+  };
+  const result = getContextData(input);
+  assert.equal(result.usedPercent, 50);
+  assert.equal(result.windowSize, 50000);
 });

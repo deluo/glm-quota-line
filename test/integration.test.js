@@ -24,6 +24,14 @@ import {
   setToolConfigValue
 } from "../src/claude/settings.js";
 import { refreshQuotaOnSessionStart } from "../src/claude/sessionStart.js";
+import {
+  readCtxCache,
+  writeCtxCache,
+  clearCtxCache,
+  writeSuccessCache,
+  writeFailureCache,
+  cleanupExpiredCache
+} from "../src/core/quota/cache.js";
 import { createQuotaConfig, makeJsonResponse, withTempDir } from "./helpers.js";
 
 function stripAnsi(value) {
@@ -611,6 +619,10 @@ test("installClaudeStatusLine writes a managed statusLine command", async () => 
       {
         matcher: "clear",
         hooks: [{ type: "command", command: sessionStartHookCommand }]
+      },
+      {
+        matcher: "compact",
+        hooks: [{ type: "command", command: sessionStartHookCommand }]
       }
     ]);
     assert.deepEqual(toolConfig.install, {
@@ -619,7 +631,7 @@ test("installClaudeStatusLine writes a managed statusLine command", async () => 
       installed: true,
       sessionStartHook: {
         command: sessionStartHookCommand,
-        matchers: ["startup", "resume", "clear"],
+        matchers: ["startup", "resume", "clear", "compact"],
         installed: true
       }
     });
@@ -676,6 +688,10 @@ test("installClaudeStatusLine preserves unrelated SessionStart hooks", async () 
       },
       {
         matcher: "clear",
+        hooks: [{ type: "command", command: sessionStartHookCommand }]
+      },
+      {
+        matcher: "compact",
         hooks: [{ type: "command", command: sessionStartHookCommand }]
       }
     ]);
@@ -1235,4 +1251,337 @@ test("isGLM is false when base URL points to a non-Zhipu provider", async () => 
     ANTHROPIC_BASE_URL: "https://api.anthropic.com/v1"
   }, {}, { claudeSettingsPath: "/nonexistent/settings.json" });
   assert.equal(config.isGLM, false);
+});
+
+// --- ctx cache ---
+
+test("writeCtxCache writes ctx data to existing cache file", async () => {
+  await withTempDir(async (dir) => {
+    const cacheFilePath = path.join(dir, "cache.json");
+    await writeSuccessCache(cacheFilePath, {
+      kind: "success",
+      level: "lite",
+      display: "percent",
+      leftPercent: 91,
+      usedPercent: 9
+    }, { now: Date.now(), sessionId: "session-1" });
+
+    const ctxData = { usedPercent: 45, remainingPercent: 55, modelId: "glm-4.7", windowSize: 200000, severity: "good" };
+    await writeCtxCache(cacheFilePath, ctxData);
+
+    const raw = JSON.parse(await fs.readFile(cacheFilePath, "utf8"));
+    assert.deepEqual(raw.ctx, ctxData);
+    assert.equal(raw.result.kind, "success"); // quota data preserved
+  });
+});
+
+test("writeCtxCache creates file if it does not exist", async () => {
+  await withTempDir(async (dir) => {
+    const cacheFilePath = path.join(dir, "cache.json");
+    const ctxData = { usedPercent: 30, remainingPercent: 70, modelId: "glm-4.7", windowSize: 200000, severity: "good" };
+    await writeCtxCache(cacheFilePath, ctxData);
+
+    const raw = JSON.parse(await fs.readFile(cacheFilePath, "utf8"));
+    assert.deepEqual(raw.ctx, ctxData);
+  });
+});
+
+test("readCtxCache returns cached ctx for matching session", async () => {
+  await withTempDir(async (dir) => {
+    const cacheFilePath = path.join(dir, "cache.json");
+    const ctxData = { usedPercent: 50, remainingPercent: 50, modelId: "glm-4.7", windowSize: 200000, severity: "warn" };
+
+    await fs.writeFile(cacheFilePath, JSON.stringify({
+      savedAt: Date.now(),
+      sessionId: "session-abc",
+      result: { kind: "success", level: "lite", display: "percent", leftPercent: 91 },
+      ctx: ctxData
+    }));
+
+    const result = await readCtxCache(cacheFilePath, "session-abc");
+    assert.deepEqual(result, ctxData);
+  });
+});
+
+test("readCtxCache returns null for different session", async () => {
+  await withTempDir(async (dir) => {
+    const cacheFilePath = path.join(dir, "cache.json");
+    const ctxData = { usedPercent: 50, remainingPercent: 50, modelId: "glm-4.7", windowSize: 200000, severity: "warn" };
+
+    await fs.writeFile(cacheFilePath, JSON.stringify({
+      sessionId: "session-old",
+      ctx: ctxData
+    }));
+
+    const result = await readCtxCache(cacheFilePath, "session-new");
+    assert.equal(result, null);
+  });
+});
+
+test("readCtxCache returns null when no ctx in cache", async () => {
+  await withTempDir(async (dir) => {
+    const cacheFilePath = path.join(dir, "cache.json");
+    await fs.writeFile(cacheFilePath, JSON.stringify({
+      savedAt: Date.now(),
+      sessionId: "session-1",
+      result: { kind: "success", level: "lite", display: "percent", leftPercent: 91 }
+    }));
+
+    const result = await readCtxCache(cacheFilePath, "session-1");
+    assert.equal(result, null);
+  });
+});
+
+test("readCtxCache returns null for invalid ctx shape", async () => {
+  await withTempDir(async (dir) => {
+    const cacheFilePath = path.join(dir, "cache.json");
+    await fs.writeFile(cacheFilePath, JSON.stringify({
+      sessionId: "session-1",
+      ctx: { remainingPercent: 50 } // missing usedPercent
+    }));
+
+    const result = await readCtxCache(cacheFilePath, "session-1");
+    assert.equal(result, null);
+  });
+});
+
+test("readCtxCache returns null for missing file", async () => {
+  const result = await readCtxCache("/nonexistent/cache.json", "session-1");
+  assert.equal(result, null);
+});
+
+test("writeCache preserves existing ctx field", async () => {
+  await withTempDir(async (dir) => {
+    const cacheFilePath = path.join(dir, "cache.json");
+    const ctxData = { usedPercent: 40, remainingPercent: 60, modelId: "glm-4.7", windowSize: 200000, severity: "good" };
+
+    // Write ctx first
+    await fs.writeFile(cacheFilePath, JSON.stringify({ ctx: ctxData }));
+
+    // Quota write should preserve ctx
+    await writeSuccessCache(cacheFilePath, {
+      kind: "success",
+      level: "lite",
+      display: "percent",
+      leftPercent: 80,
+      usedPercent: 20
+    }, { now: Date.now(), sessionId: "session-1" });
+
+    const raw = JSON.parse(await fs.readFile(cacheFilePath, "utf8"));
+    assert.deepEqual(raw.ctx, ctxData);
+    assert.equal(raw.result.leftPercent, 80);
+  });
+});
+
+test("writeFailureCache preserves existing ctx field", async () => {
+  await withTempDir(async (dir) => {
+    const cacheFilePath = path.join(dir, "cache.json");
+    const ctxData = { usedPercent: 55, remainingPercent: 45, modelId: "glm-4.7", windowSize: 200000, severity: "warn" };
+
+    await fs.writeFile(cacheFilePath, JSON.stringify({
+      savedAt: Date.now() - 1000,
+      sessionId: "session-1",
+      result: { kind: "success", level: "lite", display: "percent", leftPercent: 75 },
+      ctx: ctxData
+    }));
+
+    await writeFailureCache(cacheFilePath, {
+      savedAt: Date.now() - 1000,
+      sessionId: "session-1",
+      result: { kind: "success", level: "lite", display: "percent", leftPercent: 75 }
+    }, {
+      now: Date.now(),
+      sessionId: "session-1",
+      failureKind: "unavailable"
+    });
+
+    const raw = JSON.parse(await fs.readFile(cacheFilePath, "utf8"));
+    assert.deepEqual(raw.ctx, ctxData);
+    assert.equal(raw.lastFailureKind, "unavailable");
+  });
+});
+
+test("writeCtxCache overwrites previous ctx data", async () => {
+  await withTempDir(async (dir) => {
+    const cacheFilePath = path.join(dir, "cache.json");
+
+    const ctx1 = { usedPercent: 30, remainingPercent: 70, modelId: "glm-4.7", windowSize: 200000, severity: "good" };
+    await writeCtxCache(cacheFilePath, ctx1);
+
+    const ctx2 = { usedPercent: 60, remainingPercent: 40, modelId: "glm-4.7", windowSize: 200000, severity: "warn" };
+    await writeCtxCache(cacheFilePath, ctx2);
+
+    const raw = JSON.parse(await fs.readFile(cacheFilePath, "utf8"));
+    assert.deepEqual(raw.ctx, ctx2);
+  });
+});
+
+test("readCtxCache ignores session when sessionId is empty", async () => {
+  await withTempDir(async (dir) => {
+    const cacheFilePath = path.join(dir, "cache.json");
+    const ctxData = { usedPercent: 50, remainingPercent: 50, modelId: "glm-4.7", windowSize: 200000, severity: "warn" };
+
+    await fs.writeFile(cacheFilePath, JSON.stringify({
+      sessionId: "session-old",
+      ctx: ctxData
+    }));
+
+    // Empty sessionId should still return cached ctx
+    const result = await readCtxCache(cacheFilePath, "");
+    assert.deepEqual(result, ctxData);
+  });
+});
+
+// --- clearCtxCache ---
+
+test("clearCtxCache removes ctx from existing cache file", async () => {
+  await withTempDir(async (dir) => {
+    const cacheFilePath = path.join(dir, "cache.json");
+    const ctxData = { usedPercent: 80, remainingPercent: 20, modelId: "glm-4.7", windowSize: 200000, severity: "danger" };
+
+    await fs.writeFile(cacheFilePath, JSON.stringify({
+      savedAt: Date.now(),
+      sessionId: "session-1",
+      result: { kind: "success", level: "lite", display: "percent", leftPercent: 50 },
+      ctx: ctxData
+    }));
+
+    await clearCtxCache(cacheFilePath);
+
+    const raw = JSON.parse(await fs.readFile(cacheFilePath, "utf8"));
+    assert.equal("ctx" in raw, false);
+    assert.equal(raw.result.kind, "success"); // quota data preserved
+  });
+});
+
+test("clearCtxCache is no-op when no ctx exists", async () => {
+  await withTempDir(async (dir) => {
+    const cacheFilePath = path.join(dir, "cache.json");
+    await fs.writeFile(cacheFilePath, JSON.stringify({
+      savedAt: Date.now(),
+      result: { kind: "success", level: "lite", display: "percent", leftPercent: 50 }
+    }));
+
+    await clearCtxCache(cacheFilePath);
+
+    const raw = JSON.parse(await fs.readFile(cacheFilePath, "utf8"));
+    assert.equal(raw.result.kind, "success");
+  });
+});
+
+test("clearCtxCache is no-op when cache file does not exist", async () => {
+  await clearCtxCache("/nonexistent/cache.json"); // should not throw
+});
+
+// --- compact source clears ctx cache ---
+
+test("refreshQuotaOnSessionStart clears ctx cache on compact source", async () => {
+  await withTempDir(async (dir) => {
+    const configPath = path.join(dir, "glm-quota-line.json");
+    const cacheFilePath = path.join(dir, "cache.json");
+    const ctxData = { usedPercent: 75, remainingPercent: 25, modelId: "glm-4.7", windowSize: 200000, severity: "danger" };
+
+    await fs.writeFile(configPath, JSON.stringify({ schemaVersion: 1, managedBy: "glm-quota-line", install: {} }));
+    await fs.writeFile(cacheFilePath, JSON.stringify({
+      savedAt: Date.now(),
+      sessionId: "session-1",
+      result: { kind: "success", level: "lite", display: "percent", leftPercent: 50 },
+      ctx: ctxData
+    }));
+
+    const stream = Readable.from([
+      JSON.stringify({ session_id: "session-1", source: "compact" })
+    ]);
+    stream.isTTY = false;
+
+    await refreshQuotaOnSessionStart({
+      stdin: stream,
+      configPath,
+      loadConfigFn: () => ({
+        quotaUrl: "https://bigmodel.cn/api/monitor/usage/quota/limit",
+        authorization: "token",
+        timeoutMs: 5000,
+        cacheFilePath
+      }),
+      fetchImpl: async () => makeJsonResponse(SUCCESS_BODY),
+      now: Date.now()
+    });
+
+    const raw = JSON.parse(await fs.readFile(cacheFilePath, "utf8"));
+    assert.equal("ctx" in raw, false, "ctx should be cleared after compact");
+  });
+});
+
+test("refreshQuotaOnSessionStart clears ctx cache on clear source", async () => {
+  await withTempDir(async (dir) => {
+    const configPath = path.join(dir, "glm-quota-line.json");
+    const cacheFilePath = path.join(dir, "cache.json");
+    const ctxData = { usedPercent: 75, remainingPercent: 25, modelId: "glm-4.7", windowSize: 200000, severity: "danger" };
+
+    await fs.writeFile(configPath, JSON.stringify({ schemaVersion: 1, managedBy: "glm-quota-line", install: {} }));
+    await fs.writeFile(cacheFilePath, JSON.stringify({
+      savedAt: Date.now(),
+      sessionId: "session-1",
+      result: { kind: "success", level: "lite", display: "percent", leftPercent: 50 },
+      ctx: ctxData
+    }));
+
+    const stream = Readable.from([
+      JSON.stringify({ session_id: "session-1", source: "clear" })
+    ]);
+    stream.isTTY = false;
+
+    await refreshQuotaOnSessionStart({
+      stdin: stream,
+      configPath,
+      loadConfigFn: () => ({
+        quotaUrl: "https://bigmodel.cn/api/monitor/usage/quota/limit",
+        authorization: "token",
+        timeoutMs: 5000,
+        cacheFilePath
+      }),
+      fetchImpl: async () => makeJsonResponse(SUCCESS_BODY),
+      now: Date.now()
+    });
+
+    const raw = JSON.parse(await fs.readFile(cacheFilePath, "utf8"));
+    assert.equal("ctx" in raw, false, "ctx should be cleared after clear");
+  });
+});
+
+test("refreshQuotaOnSessionStart clears ctx cache on startup source", async () => {
+  await withTempDir(async (dir) => {
+    const configPath = path.join(dir, "glm-quota-line.json");
+    const cacheFilePath = path.join(dir, "cache.json");
+    const ctxData = { usedPercent: 50, remainingPercent: 50, modelId: "glm-4.7", windowSize: 200000, severity: "warn" };
+
+    await fs.writeFile(configPath, JSON.stringify({ schemaVersion: 1, managedBy: "glm-quota-line", install: {} }));
+    await fs.writeFile(cacheFilePath, JSON.stringify({
+      savedAt: Date.now() - 10000,
+      sessionId: "session-old",
+      result: { kind: "success", level: "lite", display: "percent", leftPercent: 88 },
+      ctx: ctxData
+    }));
+
+    const stream = Readable.from([
+      JSON.stringify({ session_id: "session-new", source: "startup" })
+    ]);
+    stream.isTTY = false;
+
+    await refreshQuotaOnSessionStart({
+      stdin: stream,
+      configPath,
+      loadConfigFn: () => ({
+        quotaUrl: "https://bigmodel.cn/api/monitor/usage/quota/limit",
+        authorization: "token",
+        timeoutMs: 5000,
+        cacheFilePath
+      }),
+      fetchImpl: async () => makeJsonResponse(SUCCESS_BODY),
+      now: Date.now()
+    });
+
+    const raw = JSON.parse(await fs.readFile(cacheFilePath, "utf8"));
+    assert.equal("ctx" in raw, false, "ctx should be cleared on startup to avoid stale data from previous session");
+  });
 });

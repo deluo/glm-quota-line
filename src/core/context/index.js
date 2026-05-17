@@ -8,6 +8,11 @@ const STRATEGY = {
   API_ONLY: "api_only"
 };
 
+function resolveWindowSize(parsed, modelMap) {
+  return parsed.contextWindowSize
+    || (parsed.modelId ? (modelMap ? modelMap[parsed.modelId] : getModelSize(parsed.modelId)) : null);
+}
+
 export function getContextData(input, options = {}) {
   const {
     modelMap = null,
@@ -28,8 +33,7 @@ export function getContextData(input, options = {}) {
   let windowSize = null;
 
   if (strategy === STRATEGY.TOKEN_FIRST && modelId && tokenUsage) {
-    windowSize = parsed.contextWindowSize
-      || (modelMap ? modelMap[modelId] : getModelSize(modelId));
+    windowSize = resolveWindowSize(parsed, modelMap);
 
     if (windowSize) {
       result = calculateFromTokens(tokenUsage, windowSize);
@@ -48,16 +52,15 @@ export function getContextData(input, options = {}) {
     }
   }
 
-  if (!result) {
+  if (!result || result.used === 0) {
     if (debug) {
-      process.stderr.write("[ctx] No valid calculation result\n");
+      process.stderr.write(result ? "[ctx] Used is 0 — likely a placeholder, skipping\n" : "[ctx] No valid calculation result\n");
     }
     return null;
   }
 
   if (!windowSize) {
-    windowSize = parsed.contextWindowSize
-      || (modelId ? (modelMap ? modelMap[modelId] : getModelSize(modelId)) : null);
+    windowSize = resolveWindowSize(parsed, modelMap);
   }
 
   return {

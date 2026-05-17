@@ -10,7 +10,7 @@ import { readToolConfig } from "../claude/settings.js";
 import { resolveQuotaStatus } from "../core/quota/service.js";
 import { getPackageVersion } from "../shared/packageInfo.js";
 import { getContextData } from "../core/context/index.js";
-import { cleanupExpiredCache } from "../core/quota/cache.js";
+import { cleanupExpiredCache, readCtxCache, writeCtxCache } from "../core/quota/cache.js";
 import { getCacheRoot } from "../shared/utils.js";
 import {
   isValidDisplayMode,
@@ -128,7 +128,7 @@ function handleTerminalQuery(args, userConfig, quotaStatus) {
   process.stdout.write(humanOutput || "GLM | quota unavailable\n");
 }
 
-function handleStatusLine(args, userConfig, config, statusLineInput, quotaStatus) {
+async function handleStatusLine(args, userConfig, config, statusLineInput, quotaStatus) {
   if (args.json) {
     process.stderr.write("Warning: --json is ignored in status-line mode.\n");
   }
@@ -143,9 +143,20 @@ function handleStatusLine(args, userConfig, config, statusLineInput, quotaStatus
   const ctxDisabled = userConfig.lines?.[0]?.components?.some(
     c => c.type === "ctx" && c.enabled === false
   );
-  const ctxModel = !ctxDisabled
-    ? getContextData(statusLineInput, { debug: DEBUG })
-    : null;
+  let ctxModel = null;
+
+  if (!ctxDisabled) {
+    ctxModel = getContextData(statusLineInput, { debug: DEBUG });
+
+    if (ctxModel) {
+      await writeCtxCache(config.cacheFilePath, ctxModel).catch(() => {});
+    } else {
+      ctxModel = await readCtxCache(config.cacheFilePath, config.sessionId);
+      if (DEBUG && ctxModel) {
+        process.stderr.write("[DEBUG] ctx: using cached data (fresh calculation returned null)\n");
+      }
+    }
+  }
 
   if (DEBUG && ctxModel) {
     process.stderr.write(`[DEBUG] ctxModel: ${JSON.stringify(ctxModel)}\n`);
@@ -218,7 +229,7 @@ export async function main() {
     if (!statusLineInput) {
       handleTerminalQuery(args, userConfig, quotaStatus);
     } else {
-      handleStatusLine(args, userConfig, config, statusLineInput, quotaStatus);
+      await handleStatusLine(args, userConfig, config, statusLineInput, quotaStatus);
     }
   } catch (error) {
     if (process.env.GLM_QUOTA_DEBUG === "1") {

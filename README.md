@@ -30,6 +30,14 @@
 
 ## 快速开始
 
+**一次性查询（无需安装）：**
+
+```bash
+npx glm-quota-line
+```
+
+**状态栏集成（需要全局安装）：**
+
 ```bash
 npm install -g glm-quota-line
 glm-quota-line install
@@ -243,6 +251,7 @@ glm-quota-line config unset <key>
 - 非 GLM 提供商（非智谱 AI 端点）会自动禁用配额查询
 - `install` 默认不会覆盖非本工具管理的状态栏，除非使用 `--force`
 - `install --force` 会备份旧配置，`uninstall` 会在可能时恢复
+- 设置 `GLM_QUOTA_DEBUG=1` 可输出上下文窗口调试信息到 stderr
 
 ## 许可证
 

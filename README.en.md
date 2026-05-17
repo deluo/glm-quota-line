@@ -30,6 +30,14 @@
 
 ## Quick Start
 
+**One-time query (no install needed):**
+
+```bash
+npx glm-quota-line
+```
+
+**Status line integration (global install required):**
+
 ```bash
 npm install -g glm-quota-line
 glm-quota-line install
@@ -242,6 +250,7 @@ Run `glm-quota-line --help` for full descriptions.
 - Missing auth returns `GLM | auth expired`; API failures return `GLM | quota unavailable`
 - `install` does not replace an unmanaged status line unless `--force` is used
 - `install --force` backs up the previous entry; `uninstall` restores it when possible
+- Set `GLM_QUOTA_DEBUG=1` to output context window debug info to stderr
 
 ## License
 
