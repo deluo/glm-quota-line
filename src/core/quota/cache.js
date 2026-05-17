@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { asFiniteNumber } from "../../shared/utils.js";
+import { asFiniteNumber, getCacheRoot } from "../../shared/utils.js";
 
 function isValidQuotaShape(value) {
   if (!value || typeof value.key !== "string") {
@@ -150,4 +150,79 @@ export async function writeFailureCache(cacheFilePath, cached, options = {}) {
     lastFailureKind: options.failureKind || "unavailable",
     result: cached?.result ?? null
   });
+}
+
+/**
+ * 清理过期的缓存文件
+ * @param {Object} options - 清理选项
+ * @param {number} options.maxAgeMs - 缓存文件最大保留时间（毫秒），默认 30 天
+ * @param {number} options.now - 当前时间戳（用于测试）
+ * @param {Function} options.getCacheRoot - 获取缓存目录的函数（用于测试）
+ * @returns {Object} 清理结果统计
+ */
+export async function cleanupExpiredCache(options = {}) {
+  const maxAgeMs = options.maxAgeMs ?? 30 * 24 * 60 * 60 * 1000;
+  const now = options.now ?? Date.now();
+  const getCacheRootFn = options.getCacheRoot ?? getCacheRoot;
+  const cacheDir = path.join(getCacheRootFn(), "glm-quota-line");
+
+  try {
+    const entries = await fs.readdir(cacheDir, { withFileTypes: true });
+
+    let deletedCount = 0;
+    let totalSize = 0;
+    const errors = [];
+
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.startsWith("cache-") || !entry.name.endsWith(".json")) {
+        continue;
+      }
+
+      const filePath = path.join(cacheDir, entry.name);
+
+      try {
+        const stats = await fs.stat(filePath);
+
+        // Fast path: if mtime is recent enough, skip file read entirely
+        if (now - stats.mtimeMs <= maxAgeMs) {
+          continue;
+        }
+
+        // Slow path: check internal timestamp for accurate age
+        let cacheAge = now - stats.mtimeMs;
+
+        try {
+          const raw = await fs.readFile(filePath, "utf8");
+          const parsed = JSON.parse(raw);
+          const savedAt = asFiniteNumber(parsed.savedAt) ?? asFiniteNumber(parsed.lastAttemptAt);
+
+          if (savedAt !== null) {
+            cacheAge = now - savedAt;
+          }
+        } catch {
+          // parse failure — use mtime age already set above
+        }
+
+        if (cacheAge > maxAgeMs) {
+          totalSize += stats.size;
+          await fs.unlink(filePath);
+          deletedCount++;
+        }
+      } catch (error) {
+        errors.push({ file: entry.name, error: error.message });
+      }
+    }
+
+    return {
+      deletedCount,
+      totalSize,
+      errors,
+      cacheDir
+    };
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return { deletedCount: 0, totalSize: 0, errors: [], cacheDir };
+    }
+    throw error;
+  }
 }

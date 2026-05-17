@@ -1,3 +1,6 @@
+import os from "node:os";
+import path from "node:path";
+
 export function padTwoDigits(value) {
   return String(value).padStart(2, "0");
 }
@@ -38,4 +41,16 @@ export function normalizeOptionalString(value) {
   }
 
   return value.trim();
+}
+
+export function getCacheRoot() {
+  if (process.platform === "darwin") {
+    return path.join(os.homedir(), "Library", "Caches");
+  }
+
+  if (process.platform === "win32") {
+    return process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
+  }
+
+  return process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache");
 }

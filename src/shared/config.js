@@ -1,19 +1,15 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 
-import { normalizeOptionalString } from "./utils.js";
+import { normalizeOptionalString, getCacheRoot } from "./utils.js";
 import {
   DEFAULT_CN_BASE_URL,
   DEFAULT_INTL_BASE_URL,
   DEFAULT_QUOTA_URL,
   DEFAULT_TIMEOUT_MS
 } from "./constants.js";
-
-function getClaudeSettingsPath() {
-  return path.join(os.homedir(), ".claude", "settings.json");
-}
+import { getClaudeSettingsPath } from "../claude/settings.js";
 
 async function readClaudeEnv(claudeSettingsPath) {
   try {
@@ -26,63 +22,30 @@ async function readClaudeEnv(claudeSettingsPath) {
   }
 }
 
-function getCacheRoot() {
-  if (process.platform === "darwin") {
-    return path.join(os.homedir(), "Library", "Caches");
-  }
-
-  if (process.platform === "win32") {
-    return process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
-  }
-
-  return process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache");
-}
-
-function isZhipuProvider(baseUrl) {
+function classifyHost(baseUrl) {
   if (!baseUrl) {
-    return true;
+    return { isZhipu: true, quotaUrl: "" };
   }
 
   try {
     const host = new URL(baseUrl).host;
-    return (
-      host.includes("api.z.ai") ||
+    const isIntl = host.includes("api.z.ai");
+    const isCn =
       host.includes("open.bigmodel.cn") ||
       host.includes("dev.bigmodel.cn") ||
       host === "bigmodel.cn" ||
-      host.endsWith(".bigmodel.cn")
-    );
-  } catch {
-    return false;
-  }
-}
+      host.endsWith(".bigmodel.cn");
 
-function deriveQuotaUrl(baseUrl) {
-  if (!baseUrl) {
-    return "";
-  }
-
-  try {
-    const parsedBaseUrl = new URL(baseUrl);
-    const host = parsedBaseUrl.host;
-
-    if (host.includes("api.z.ai")) {
-      return `${DEFAULT_INTL_BASE_URL}/api/monitor/usage/quota/limit`;
+    if (isIntl) {
+      return { isZhipu: true, quotaUrl: `${DEFAULT_INTL_BASE_URL}/api/monitor/usage/quota/limit` };
     }
-
-    if (
-      host.includes("open.bigmodel.cn") ||
-      host.includes("dev.bigmodel.cn") ||
-      host === "bigmodel.cn" ||
-      host.endsWith(".bigmodel.cn")
-    ) {
-      return `${DEFAULT_CN_BASE_URL}/api/monitor/usage/quota/limit`;
+    if (isCn) {
+      return { isZhipu: true, quotaUrl: `${DEFAULT_CN_BASE_URL}/api/monitor/usage/quota/limit` };
     }
+    return { isZhipu: false, quotaUrl: "" };
   } catch {
-    return "";
+    return { isZhipu: false, quotaUrl: "" };
   }
-
-  return "";
 }
 
 export async function loadConfig(env = process.env, overrides = {}, options = {}) {
@@ -91,8 +54,7 @@ export async function loadConfig(env = process.env, overrides = {}, options = {}
     normalizeOptionalString(overrides.baseUrl) ||
     normalizeOptionalString(env.ANTHROPIC_BASE_URL) ||
     normalizeOptionalString(claudeEnv?.ANTHROPIC_BASE_URL);
-  const derivedQuotaUrl = deriveQuotaUrl(anthropicBaseUrl);
-  const isGLM = isZhipuProvider(anthropicBaseUrl);
+  const { isZhipu: isGLM, quotaUrl: derivedQuotaUrl } = classifyHost(anthropicBaseUrl);
   const authorization =
     normalizeOptionalString(overrides.authToken) ||
     normalizeOptionalString(env.ANTHROPIC_AUTH_TOKEN) ||

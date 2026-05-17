@@ -41,21 +41,6 @@ test("parseArgs accepts theme and version flags", () => {
   });
 });
 
-test("parseArgs --ctx enables context only for on", () => {
-  assert.equal(parseArgs(["--ctx", "on"]).ctxEnabled, true);
-  assert.equal(parseArgs(["--ctx=on"]).ctxEnabled, true);
-  assert.equal(parseArgs(["--ctx", "off"]).ctxEnabled, false);
-  assert.equal(parseArgs(["--ctx=off"]).ctxEnabled, false);
-  assert.equal("ctxEnabled" in parseArgs([]), false);
-});
-
-test("parseArgs --ctx rejects invalid values", () => {
-  const result = parseArgs(["--ctx", "yes"]);
-  assert.equal("ctxEnabled" in result, false);
-  assert.equal(process.exitCode, 1);
-  process.exitCode = 0;
-});
-
 test("stored auth token and base url override Claude environment values", async () => {
   const config = await loadConfig(
     {
@@ -117,41 +102,6 @@ test("display config redacts stored auth tokens", () => {
 
   assert.equal(displayConfig.authToken, "real...oken");
   assert.equal(displayConfig.baseUrl, "https://open.bigmodel.cn/api/anthropic");
-});
-
-test("config set ctx persists boolean on/off", async () => {
-  await withTempDir(async (dir) => {
-    const configPath = path.join(dir, "glm-quota-line.json");
-
-    await setToolConfigValue("ctxEnabled", false, configPath);
-    assert.equal((await readToolConfig(configPath)).ctxEnabled, false);
-
-    await setToolConfigValue("ctxEnabled", true, configPath);
-    assert.equal((await readToolConfig(configPath)).ctxEnabled, true);
-  });
-});
-
-test("config set ctx rejects invalid values", async () => {
-  let output = "";
-  await handleCommand(
-    { positionals: ["config", "set", "ctx", "yes"] },
-    { write(chunk) { output += chunk; } }
-  );
-
-  assert.match(output, /Invalid ctx/);
-  process.exitCode = 0;
-});
-
-test("config unset ctx removes the persisted key", async () => {
-  await withTempDir(async (dir) => {
-    const configPath = path.join(dir, "glm-quota-line.json");
-
-    await setToolConfigValue("ctxEnabled", false, configPath);
-    assert.equal((await readToolConfig(configPath)).ctxEnabled, false);
-
-    await unsetToolConfigValue("ctxEnabled", configPath);
-    assert.equal("ctxEnabled" in (await readToolConfig(configPath)), false);
-  });
 });
 
 test("version command prints the installed package version", async () => {
@@ -275,4 +225,36 @@ test("cli --version prints the installed package version", async () => {
   });
 
   assert.equal(stdout, `glm-quota-line ${await getPackageVersion()}\n`);
+});
+
+test("handleCommand returns false for configure command", async () => {
+  const handled = await handleCommand(
+    { positionals: ["configure"] },
+    { write() {} }
+  );
+  assert.equal(handled, false);
+});
+
+test("readToolConfig auto-migrates legacy ctxEnabled to lines format", async () => {
+  await withTempDir(async (dir) => {
+    const configPath = path.join(dir, "glm-quota-line.json");
+    const fs = await import("node:fs/promises");
+    await fs.writeFile(configPath, JSON.stringify({
+      schemaVersion: 1,
+      managedBy: "glm-quota-line",
+      ctxEnabled: false,
+      theme: "light",
+      style: "text",
+      install: {}
+    }, null, 2));
+
+    const config = await readToolConfig(configPath);
+    assert.equal(config.ctxEnabled, undefined);
+    assert.ok(config.lines);
+    assert.strictEqual(config.lines[0].components[4].enabled, false);
+
+    // Verify persisted file no longer has ctxEnabled
+    const raw = JSON.parse(await fs.readFile(configPath, "utf8"));
+    assert.equal("ctxEnabled" in raw, false);
+  });
 });

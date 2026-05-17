@@ -33,8 +33,8 @@ test("buildStatusViewModel prioritizes the 5h token quota and exposes weekly sum
 
   assert.equal(model.kind, "success");
   assert.equal(model.levelLabel, "GLM Lite");
-  assert.equal(model.leftPercent, 91);
-  assert.equal(model.usedPercent, 9);
+  assert.equal(model.primaryQuota.leftPercent, 91);
+  assert.equal(model.primaryQuota.usedPercent, 9);
   assert.equal(model.primaryQuota.label, "5h");
   assert.equal(model.secondaryQuota.label, "week");
   assert.equal(model.primaryQuota.leftText, "91%");
@@ -210,19 +210,19 @@ test("ctx model appends context bar segment in bar style", () => {
 test("ctx severity colors: good below 60%, warn at 60%, danger at 80%", () => {
   const good = formatStatus(
     { kind: "success", level: "lite", display: "percent", leftPercent: 80, usedPercent: 20 },
-    { style: "text", theme: "dark", ctxModel: { usedPercent: 30, remainingPercent: 70 } }
+    { style: "text", theme: "dark", ctxModel: { usedPercent: 30, remainingPercent: 70, severity: "good" } }
   );
   assert.match(good, /\u001b\[38;2;70;148;175m30%\u001b\[0m/);
 
   const warn = formatStatus(
     { kind: "success", level: "lite", display: "percent", leftPercent: 80, usedPercent: 20 },
-    { style: "text", theme: "dark", ctxModel: { usedPercent: 65, remainingPercent: 35 } }
+    { style: "text", theme: "dark", ctxModel: { usedPercent: 65, remainingPercent: 35, severity: "warn" } }
   );
   assert.match(warn, /\u001b\[38;2;255;130;0m65%\u001b\[0m/);
 
   const danger = formatStatus(
     { kind: "success", level: "lite", display: "percent", leftPercent: 80, usedPercent: 20 },
-    { style: "text", theme: "dark", ctxModel: { usedPercent: 85, remainingPercent: 15 } }
+    { style: "text", theme: "dark", ctxModel: { usedPercent: 85, remainingPercent: 15, severity: "danger" } }
   );
   assert.match(danger, /\u001b\[38;2;220;53;19m85%\u001b\[0m/);
 });
@@ -242,4 +242,94 @@ test("ctx model is skipped when not provided", () => {
 
   assert.equal(stripAnsi(output), "GLM Lite | 5h 80% | reset 14:47");
   assert.equal(output.includes("ctx"), false);
+});
+
+// --- minimalist mode ---
+
+test("minimalist mode hides labels from bar status output", () => {
+  const output = formatStatus(
+    {
+      kind: "success",
+      level: "lite",
+      display: "percent",
+      leftPercent: 80,
+      usedPercent: 20,
+      nextResetTime: 1774939627716
+    },
+    {
+      style: "bar",
+      theme: "dark",
+      global: { minimalist: true }
+    }
+  );
+  const text = stripAnsi(output);
+  assert.equal(text.includes("GLM Lite"), false);
+  assert.equal(text.includes("80%"), true);
+});
+
+test("minimalist mode hides labels from text status output", () => {
+  const output = formatStatus(
+    {
+      kind: "success",
+      level: "lite",
+      display: "percent",
+      leftPercent: 80,
+      usedPercent: 20,
+      nextResetTime: 1774939627716
+    },
+    {
+      style: "text",
+      theme: "dark",
+      global: { minimalist: true }
+    }
+  );
+  const text = stripAnsi(output);
+  assert.equal(text.includes("GLM Lite"), false);
+  assert.equal(text.includes("reset"), false);
+  assert.equal(text.includes("80%"), true);
+});
+
+// --- rawValues mode ---
+
+test("rawValues mode hides labels and shows numeric values", () => {
+  const output = formatStatus(
+    {
+      kind: "success",
+      level: "lite",
+      display: "percent",
+      leftPercent: 80,
+      usedPercent: 20,
+      nextResetTime: 1774939627716
+    },
+    {
+      style: "text",
+      theme: "dark",
+      global: { rawValues: true }
+    }
+  );
+  const text = stripAnsi(output);
+  assert.equal(text.includes("GLM Lite"), false);
+  assert.equal(text.includes("reset"), false);
+  assert.ok(text.includes("80"));
+});
+
+test("rawValues mode hides model label in bar style", () => {
+  const output = formatStatus(
+    {
+      kind: "success",
+      level: "lite",
+      display: "percent",
+      leftPercent: 80,
+      usedPercent: 20,
+      nextResetTime: 1774939627716
+    },
+    {
+      style: "bar",
+      theme: "dark",
+      global: { rawValues: true }
+    }
+  );
+  const text = stripAnsi(output);
+  assert.equal(text.includes("GLM Lite"), false);
+  assert.ok(text.includes("80"));
 });

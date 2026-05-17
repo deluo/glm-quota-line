@@ -1,19 +1,5 @@
 import { normalizeTheme } from "../../shared/constants.js";
-
-const ANSI = {
-  reset: "\u001b[0m",
-  bold: "\u001b[1m",
-  dim: "\u001b[2m",
-  underline: "\u001b[4m",
-  black: "\u001b[30m",
-  gray: "\u001b[90m",
-  white: "\u001b[37m",
-  lightAccent: "\u001b[38;2;34;95;120m",
-  darkAccent: "\u001b[38;2;119;209;208m",
-  green: "\u001b[38;2;70;148;175m",
-  yellow: "\u001b[38;2;255;130;0m",
-  red: "\u001b[38;2;220;53;19m"
-};
+import { ANSI } from "../../shared/ansi.js";
 
 const THEMES = {
   dark: {

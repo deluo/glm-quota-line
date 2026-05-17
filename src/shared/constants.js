@@ -1,3 +1,48 @@
+export const COMPONENT_TYPES = {
+  MODEL: "model",
+  PRIMARY: "5h",
+  WEEKLY: "week",
+  RESET: "reset",
+  CONTEXT: "ctx"
+};
+
+export const STYLEABLE_COMPONENTS = new Set([
+  COMPONENT_TYPES.PRIMARY,
+  COMPONENT_TYPES.WEEKLY,
+  COMPONENT_TYPES.CONTEXT
+]);
+
+export const HIDABLE_COMPONENTS = new Set([
+  COMPONENT_TYPES.MODEL,
+  COMPONENT_TYPES.WEEKLY,
+  COMPONENT_TYPES.RESET,
+  COMPONENT_TYPES.CONTEXT
+]);
+
+export const REQUIRED_COMPONENTS = new Set([COMPONENT_TYPES.PRIMARY]);
+
+export const DEFAULT_GLOBAL_CONFIG = {
+  theme: "dark",
+  displayMode: "left",
+  separator: " | ",
+  padding: { left: 0, right: 0 },
+  minimalist: false,
+  rawValues: false
+};
+
+export const DEFAULT_LINES = [
+  {
+    id: "main",
+    components: [
+      { type: COMPONENT_TYPES.MODEL, enabled: true },
+      { type: COMPONENT_TYPES.PRIMARY, style: "bar" },
+      { type: COMPONENT_TYPES.WEEKLY, enabled: true, style: "bar" },
+      { type: COMPONENT_TYPES.RESET, enabled: true },
+      { type: COMPONENT_TYPES.CONTEXT, enabled: true, style: "bar" }
+    ]
+  }
+];
+
 export const DEFAULT_QUOTA_URL = "https://bigmodel.cn/api/monitor/usage/quota/limit";
 export const DEFAULT_CN_BASE_URL = "https://open.bigmodel.cn";
 export const DEFAULT_INTL_BASE_URL = "https://api.z.ai";
@@ -22,15 +67,6 @@ export const STATUS_BAR_CHARACTERS = {
   empty: "░"
 };
 
-// GLM 模型上下文窗口大小映射（token 数）
-export const MODEL_CONTEXT_WINDOW = {
-  "glm-4.5-air": 128_000,
-  "glm-4.7": 200_000,
-  "glm-5-turbo": 200_000,
-  "glm-5": 200_000,
-  "glm-5.1": 200_000,
-};
-
 export const TOOL_CONFIG_SCHEMA_VERSION = 1;
 export const TOOL_CONFIG_MANAGED_BY = "glm-quota-line";
 
@@ -50,10 +86,6 @@ export function isValidWorkDays(value) {
   return Number.isInteger(value) && value >= 1 && value <= 7;
 }
 
-export function normalizeStatusStyle(value) {
-  return isValidStatusStyle(value) ? value : DEFAULT_STYLE;
-}
-
 export function normalizeDisplayMode(value) {
   return isValidDisplayMode(value) ? value : DEFAULT_DISPLAY_MODE;
 }
@@ -61,3 +93,112 @@ export function normalizeDisplayMode(value) {
 export function normalizeTheme(value) {
   return isValidTheme(value) ? value : DEFAULT_THEME;
 }
+
+export function validateComponent(comp) {
+  if (!comp.type || typeof comp.type !== "string") {
+    return false;
+  }
+
+  if (comp.type === COMPONENT_TYPES.PRIMARY && comp.enabled === false) {
+    return false;
+  }
+
+  if (comp.style !== undefined && !STYLEABLE_COMPONENTS.has(comp.type)) {
+    return false;
+  }
+
+  if (comp.style !== undefined && !["bar", "text"].includes(comp.style)) {
+    return false;
+  }
+
+  if (comp.enabled !== undefined && typeof comp.enabled !== "boolean") {
+    return false;
+  }
+
+  if (comp.rawValue !== undefined && typeof comp.rawValue !== "boolean") {
+    return false;
+  }
+
+  return true;
+}
+
+export function validateLine(line) {
+  if (!line || !line.components || !Array.isArray(line.components)) {
+    return false;
+  }
+
+  const types = line.components.map(c => c.type);
+  if (!types.includes(COMPONENT_TYPES.PRIMARY)) {
+    return false;
+  }
+
+  return line.components.every(validateComponent);
+}
+
+export function validateConfig(config) {
+  if (!config || !config.lines || !Array.isArray(config.lines)) {
+    return false;
+  }
+
+  if (config.global) {
+    if (config.global.theme && !isValidTheme(config.global.theme)) {
+      return false;
+    }
+    if (config.global.displayMode && !isValidDisplayMode(config.global.displayMode)) {
+      return false;
+    }
+  }
+
+  return config.lines.every(validateLine);
+}
+
+export function normalizeComponent(comp, defaults = {}) {
+  const normalized = { type: comp.type };
+
+  if (!REQUIRED_COMPONENTS.has(comp.type)) {
+    normalized.enabled = comp.enabled !== false;
+  } else {
+    normalized.enabled = true;
+  }
+
+  if (STYLEABLE_COMPONENTS.has(comp.type)) {
+    normalized.style = comp.style || defaults.style || "bar";
+  }
+
+  return normalized;
+}
+
+export function normalizeConfig(config) {
+  if (!config || !validateConfig(config)) {
+    const fallbackStyle = isValidStatusStyle(config?.style) ? config.style : DEFAULT_STYLE;
+    const global = {
+      ...DEFAULT_GLOBAL_CONFIG,
+      ...(isValidTheme(config?.theme) ? { theme: config.theme } : {}),
+      ...(isValidDisplayMode(config?.displayMode) ? { displayMode: config.displayMode } : {}),
+      ...(typeof config?.global?.minimalist === "boolean" ? { minimalist: config.global.minimalist } : {}),
+      ...(typeof config?.global?.rawValues === "boolean" ? { rawValues: config.global.rawValues } : {})
+    };
+    const lines = structuredClone(DEFAULT_LINES).map(line => ({
+      ...line,
+      components: line.components.map(comp => ({
+        ...comp,
+        ...(STYLEABLE_COMPONENTS.has(comp.type) ? { style: fallbackStyle } : {})
+      }))
+    }));
+    return { global, lines };
+  }
+
+  const global = { ...DEFAULT_GLOBAL_CONFIG, ...config.global };
+  const lines = config.lines.map(line => ({
+    ...line,
+    components: line.components.map(comp =>
+      normalizeComponent(comp, { style: "bar", rawValue: global.rawValues })
+    )
+  }));
+
+  return { global, lines };
+}
+
+// Re-exported for backward compatibility
+export { migrateOldConfig } from "./migration.js";
+

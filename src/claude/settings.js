@@ -9,6 +9,7 @@ import {
   isValidTheme,
   isValidWorkDays
 } from "../shared/constants.js";
+import { migrateOldConfig, needsMigration } from "../shared/migration.js";
 import { normalizeOptionalString } from "../shared/utils.js";
 import { readJsonFile, writeJsonFile } from "../shared/jsonFile.js";
 
@@ -56,12 +57,16 @@ function normalizeToolConfig(config) {
     normalized.theme = base.theme;
   }
 
-  if (typeof base.ctxEnabled === "boolean") {
-    normalized.ctxEnabled = base.ctxEnabled;
-  }
-
   if (isValidWorkDays(base.workDays)) {
     normalized.workDays = base.workDays;
+  }
+
+  if (typeof base.minimalist === "boolean") {
+    normalized.minimalist = base.minimalist;
+  }
+
+  if (typeof base.rawValues === "boolean") {
+    normalized.rawValues = base.rawValues;
   }
 
   const authToken = normalizeOptionalString(base.authToken);
@@ -74,12 +79,31 @@ function normalizeToolConfig(config) {
     normalized.baseUrl = baseUrl;
   }
 
+  // Preserve lines (component-level config) as-is
+  if (base.lines && Array.isArray(base.lines)) {
+    normalized.lines = base.lines;
+  }
+
   return normalized;
 }
 
 export async function readToolConfig(configPath = getToolConfigPath()) {
   const parsed = await readJsonFile(configPath, {});
-  return normalizeToolConfig(parsed);
+  const normalized = normalizeToolConfig(parsed);
+
+  // Migrate legacy ctxEnabled to lines-based format
+  if (needsMigration(parsed)) {
+    const migrated = migrateOldConfig({
+      ctxEnabled: parsed.ctxEnabled,
+      theme: parsed.theme,
+      displayMode: parsed.displayMode,
+      style: parsed.style
+    });
+    normalized.lines = migrated.lines;
+    await writeJsonFile(configPath, normalizeToolConfig({ ...parsed, lines: migrated.lines }));
+  }
+
+  return normalized;
 }
 
 export async function writeToolConfig(config, configPath = getToolConfigPath()) {

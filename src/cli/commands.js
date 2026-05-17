@@ -49,12 +49,6 @@ const CONFIG_KEYS = {
     validate: isValidTheme,
     invalidMessage: "Invalid theme. Use: dark, light, or mono."
   },
-  ctx: {
-    property: "ctxEnabled",
-    validate: (v) => v === "on" || v === "off",
-    invalidMessage: "Invalid ctx. Use: on or off.",
-    transform: (v) => v === "on"
-  },
   "auth-token": {
     property: "authToken",
     validate: isNonEmptyString,
@@ -72,6 +66,18 @@ const CONFIG_KEYS = {
     validate: (v) => isValidWorkDays(parseInt(v, 10)),
     invalidMessage: "Invalid work-days. Use a number between 1 and 7.",
     transform: (v) => parseInt(v, 10)
+  },
+  "minimalist": {
+    property: "minimalist",
+    validate: (v) => v === "true" || v === "false",
+    invalidMessage: "Invalid minimalist. Use: true or false.",
+    transform: (v) => v === "true"
+  },
+  "raw-values": {
+    property: "rawValues",
+    validate: (v) => v === "true" || v === "false",
+    invalidMessage: "Invalid raw-values. Use: true or false.",
+    transform: (v) => v === "true"
   }
 };
 
@@ -157,7 +163,7 @@ export async function handleCommand(args, output = process.stdout, dependencies 
     const configKey = CONFIG_KEYS[key];
     if (!configKey) {
       process.exitCode = 1;
-      output.write("Supported config keys: style, display, theme, ctx, auth-token, base-url, work-days\n");
+      output.write("Supported config keys: style, display, theme, auth-token, base-url, work-days, minimalist, raw-values\n");
       return true;
     }
 
@@ -181,7 +187,7 @@ export async function handleCommand(args, output = process.stdout, dependencies 
     const configKey = CONFIG_KEYS[key];
     if (!configKey) {
       process.exitCode = 1;
-      output.write("Supported config keys: style, display, theme, ctx, auth-token, base-url, work-days\n");
+      output.write("Supported config keys: style, display, theme, auth-token, base-url, work-days, minimalist, raw-values\n");
       return true;
     }
 
@@ -194,6 +200,10 @@ export async function handleCommand(args, output = process.stdout, dependencies 
     process.exitCode = 1;
     output.write("Supported config subcommands: show, set, unset\n");
     return true;
+  }
+
+  if (command === "configure") {
+    return false;
   }
 
   if (command) {

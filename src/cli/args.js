@@ -13,16 +13,6 @@ const FLAGS = [
   { names: ["--style"], dest: "style" },
   { names: ["--display"], dest: "displayMode" },
   { names: ["--theme"], dest: "theme" },
-  {
-    names: ["--ctx"],
-    dest: "ctxEnabled",
-    parse(value) {
-      if (value !== "on" && value !== "off") {
-        return { error: "Error: --ctx requires on or off\n" };
-      }
-      return { value: value === "on" };
-    }
-  },
   { names: ["--force"], dest: "force", boolean: true },
   { names: ["--json"], dest: "json", boolean: true },
   { names: ["--help", "-h"], dest: "help", boolean: true },

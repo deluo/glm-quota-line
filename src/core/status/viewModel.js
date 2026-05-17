@@ -19,7 +19,7 @@ function formatResetTime(timestampMs) {
   return `${padTwoDigits(date.getHours())}:${padTwoDigits(date.getMinutes())}`;
 }
 
-function getSeverity(leftPercent) {
+function getQuotaSeverity(leftPercent) {
   if (!Number.isFinite(leftPercent)) {
     return "neutral";
   }
@@ -61,7 +61,7 @@ function countWorkDays(startMs, endMs, totalDays = DEFAULT_WORK_DAYS) {
 
 function getWeeklyInfo(leftPercent, nextResetTime, workDays, now = Date.now()) {
   const totalDays = workDays || DEFAULT_WORK_DAYS;
-  const fallback = { severity: getSeverity(leftPercent), theoreticalBudget: null };
+  const fallback = { severity: getQuotaSeverity(leftPercent), theoreticalBudget: null };
 
   if (!Number.isFinite(leftPercent)) {
     return { severity: "neutral", theoreticalBudget: null };
@@ -177,9 +177,7 @@ export function buildStatusViewModel(result, options = {}) {
     secondaryQuota,
     secondarySeverity: weeklyInfo.severity,
     secondaryTheoreticalBudget: weeklyInfo.theoreticalBudget,
-    leftPercent: primaryQuota.leftPercent,
-    usedPercent: primaryQuota.usedPercent,
     resetText: formatResetTime(primaryQuota.nextResetTime),
-    severity: getSeverity(primaryQuota.leftPercent)
+    severity: getQuotaSeverity(primaryQuota.leftPercent)
   };
 }
