@@ -188,7 +188,7 @@ glm-quota-line config set base-url https://api.z.ai/api/anthropic
 2. 环境变量 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL`
 3. `~/.claude/settings.json` 中的 `env` 字段
 
-### configure — 交互式配置
+### configure — 交互式 TUI 配置
 
 启动终端交互界面，实时预览状态栏效果，逐项调整组件开关、样式和全局选项。
 
@@ -243,7 +243,7 @@ glm-quota-line config unset <key>
 ## 说明
 
 - 展示 `TOKENS_LIMIT` 配额和 `MCP_LIMIT` / `TIME_LIMIT` 配额
-- 周配额进度条中的阴影（▒）表示理论预算，基于 `work-days` 配置计算
+- 周配额进度条中的阴影（▒）是每日应耗基准线：根据已过工作日计算的理论预算，已用部分（█）超过阴影越多，说明消耗越快
 - 状态栏默认显示上下文窗口用量和模型信息，可通过 `glm-quota-line configure` 交互式关闭
 - 每个组件可单独控制开关和样式，通过 `glm-quota-line configure` 交互式调整
 - 上下文窗口使用率优先从原始 token 数计算，当模型映射不可用时回退到 API 提供的百分比

@@ -188,7 +188,7 @@ Auth source priority (highest to lowest):
 2. Environment variables `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL`
 3. `env` field in `~/.claude/settings.json`
 
-### configure — Interactive setup
+### configure — Interactive TUI setup
 
 Launch a terminal UI with live preview to adjust component toggles, styles, and global options.
 
@@ -243,7 +243,7 @@ Run `glm-quota-line --help` for full descriptions.
 ## Notes
 
 - Shows `TOKENS_LIMIT` and `MCP_LIMIT` / `TIME_LIMIT` quotas
-- Weekly quota progress bar shadow (▒) indicates theoretical budget, calculated from `work-days`
+- Weekly quota progress bar shadow (▒) is a daily pacing baseline: the theoretical budget based on elapsed work days — the more the filled bar (█) extends past the shadow, the faster you're consuming
 - Context window usage is shown by default; toggle via `glm-quota-line configure`
 - Context window usage is calculated from raw tokens when model mapping is available, falls back to API-provided percentages
 - Each component can be individually toggled and styled via `glm-quota-line configure`

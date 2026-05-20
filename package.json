@@ -13,7 +13,8 @@
     "z.ai",
     "coding-plan",
     "quota",
-    "statusline"
+    "statusline",
+    "tui"
   ],
   "repository": {
     "type": "git",
