@@ -80,7 +80,12 @@ export function setModelSize(modelId, size) {
   if (typeof modelId !== "string" || !modelId) {
     return;
   }
-  if (typeof size !== "number" || size <= 0 || !Number.isFinite(size)) {
+  if (
+    typeof size !== "number" ||
+    size <= 0 ||
+    !Number.isFinite(size) ||
+    !Number.isInteger(size)
+  ) {
     return;
   }
   modelMap[modelId] = size;
