@@ -258,3 +258,162 @@ test("readToolConfig auto-migrates legacy ctxEnabled to lines format", async () 
     assert.equal("ctxEnabled" in raw, false);
   });
 });
+
+// --- model subcommand tests ---
+// All write tests inject a temp configPath via dependencies so they never
+// touch the user's real ~/.claude/glm-quota-line.json.
+
+test("model list shows default models", async () => {
+  let output = "";
+  await handleCommand(
+    { positionals: ["model", "list"] },
+    { write(chunk) { output += chunk; } }
+  );
+  assert.match(output, /glm-4\.7\s+200K/);
+  assert.match(output, /glm-5\.2\s+1M/);
+});
+
+test("model set writes to the injected config path", async () => {
+  await withTempDir(async (dir) => {
+    const configPath = path.join(dir, "glm-quota-line.json");
+
+    let output = "";
+    await handleCommand(
+      { positionals: ["model", "set", "glm-test", "300K"] },
+      { write(chunk) { output += chunk; } },
+      { configPath }
+    );
+    assert.match(output, /Set glm-test = 300K/);
+    assert.match(output, new RegExp(`config: ${configPath}`));
+
+    // persisted to the temp file, not the real config
+    const config = await readToolConfig(configPath);
+    assert.deepEqual(config.modelMap, { "glm-test": 300000 });
+  });
+});
+
+test("model set formats 1M+ sizes with M suffix", async () => {
+  await withTempDir(async (dir) => {
+    const configPath = path.join(dir, "glm-quota-line.json");
+
+    let output = "";
+    await handleCommand(
+      { positionals: ["model", "set", "glm-1m", "1000000"] },
+      { write(chunk) { output += chunk; } },
+      { configPath }
+    );
+    assert.match(output, /Set glm-1m = 1M/);
+
+    const config = await readToolConfig(configPath);
+    assert.equal(config.modelMap["glm-1m"], 1000000);
+  });
+});
+
+test("model set then get round-trip via injected config", async () => {
+  await withTempDir(async (dir) => {
+    const configPath = path.join(dir, "glm-quota-line.json");
+
+    await handleCommand(
+      { positionals: ["model", "set", "glm-custom", "50000"] },
+      { write() {} },
+      { configPath }
+    );
+
+    let output = "";
+    await handleCommand(
+      { positionals: ["model", "get", "glm-custom"] },
+      { write(chunk) { output += chunk; } },
+      { configPath }
+    );
+    assert.match(output, /glm-custom\s+50K\s+\(custom\)/);
+  });
+});
+
+test("model remove deletes a custom mapping", async () => {
+  await withTempDir(async (dir) => {
+    const configPath = path.join(dir, "glm-quota-line.json");
+
+    await handleCommand(
+      { positionals: ["model", "set", "glm-temp", "100000"] },
+      { write() {} },
+      { configPath }
+    );
+    let output = "";
+    await handleCommand(
+      { positionals: ["model", "remove", "glm-temp"] },
+      { write(chunk) { output += chunk; } },
+      { configPath }
+    );
+    assert.match(output, /Removed glm-temp/);
+
+    const config = await readToolConfig(configPath);
+    assert.equal(config.modelMap, undefined);
+  });
+});
+
+test("model remove on built-in reverts to default", async () => {
+  await withTempDir(async (dir) => {
+    const configPath = path.join(dir, "glm-quota-line.json");
+
+    let output = "";
+    await handleCommand(
+      { positionals: ["model", "remove", "glm-4.7"] },
+      { write(chunk) { output += chunk; } },
+      { configPath }
+    );
+    assert.match(output, /Removed glm-4\.7 \(reverted to default\)/);
+  });
+});
+
+test("model get shows model size with source", async () => {
+  let output = "";
+  await handleCommand(
+    { positionals: ["model", "get", "glm-4.7"] },
+    { write(chunk) { output += chunk; } }
+  );
+  assert.match(output, /glm-4\.7\s+200K\s+\(default\)/);
+});
+
+test("model get returns error for unknown model", async () => {
+  let output = "";
+  await handleCommand(
+    { positionals: ["model", "get", "nonexistent"] },
+    { write(chunk) { output += chunk; } }
+  );
+  assert.match(output, /not found/);
+  process.exitCode = 0;
+});
+
+test("model set rejects invalid size", async () => {
+  let output = "";
+  await handleCommand(
+    { positionals: ["model", "set", "glm-test", "abc"] },
+    { write(chunk) { output += chunk; } }
+  );
+  assert.match(output, /Invalid size/);
+  process.exitCode = 0;
+});
+
+test("model set accepts K suffix case-insensitively", async () => {
+  await withTempDir(async (dir) => {
+    const configPath = path.join(dir, "glm-quota-line.json");
+
+    let output = "";
+    await handleCommand(
+      { positionals: ["model", "set", "glm-test", "300k"] },
+      { write(chunk) { output += chunk; } },
+      { configPath }
+    );
+    assert.match(output, /Set glm-test = 300K/);
+  });
+});
+
+test("model subcommand shows help for unknown action", async () => {
+  let output = "";
+  await handleCommand(
+    { positionals: ["model", "unknown"] },
+    { write(chunk) { output += chunk; } }
+  );
+  assert.match(output, /Supported model subcommands/);
+  process.exitCode = 0;
+});
