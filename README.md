@@ -184,6 +184,21 @@ glm-quota-line --json
 }
 ```
 
+### reset — 恢复出厂配置
+
+一键重置用户配置,保留安装状态(不卸载状态栏/hook)。
+
+```bash
+glm-quota-line config reset            # 交互确认后重置全部用户配置
+glm-quota-line config reset --models   # 只清空自定义模型映射(modelMap)
+glm-quota-line config reset --yes      # 跳过确认(脚本/CI 用)
+```
+
+- 默认重置范围:所有全局配置项(theme/display/style/work-days/minimalist/raw-values/reset-format/auth-token/base-url)、组件布局(lines)、自定义模型映射(modelMap)。
+- `--models` 限定只清 modelMap,其它配置不动。
+- 非交互环境(无 TTY)必须加 `--yes`,否则报错退出,避免误删。
+- 重置后状态栏仍正常工作——模型映射会回退到包内默认表(`data/models.json`)。
+
 ### auth-token / base-url — 自定义鉴权
 
 当 Claude Code 运行在代理或网关后面时，注入的 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL` 可能不是实际值，可手动覆盖：
@@ -248,7 +263,9 @@ glm-5.2        300K *
 
 `*` 标记表示用户自定义的映射。
 
-内置默认模型表位于包内 `data/models.json`,随 npm 发布。智谱发布新模型时,升级 `glm-quota-line` 即可获得最新映射,无需手动 `model set`。
+模型映射采用双层结构:包内 `data/models.json` 作为默认底层,`~/.claude/glm-quota-line.json` 里的 `modelMap` 作为用户覆盖层(运行时逐键覆盖)。**智谱发布新模型时,无需等待 npm 包更新——直接 `model set <新模型> <大小>` 写入本地覆盖层即可立刻生效。**
+
+想清空所有自定义模型映射、回到包内默认表:执行 `glm-quota-line config reset --models --yes`。
 
 ## 推荐搭配
 
@@ -277,6 +294,7 @@ glm-quota-line configure
 glm-quota-line config show
 glm-quota-line config set <style|display|theme|auth-token|base-url|work-days|minimalist|raw-values|reset-format> <value>
 glm-quota-line config unset <key>
+glm-quota-line config reset [--models] [--yes]
 glm-quota-line model list
 glm-quota-line model get <model-id>
 glm-quota-line model set <model-id> <size>

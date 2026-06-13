@@ -10,6 +10,7 @@ import { readToolConfig } from "../claude/settings.js";
 import { resolveQuotaStatus } from "../core/quota/service.js";
 import { getPackageVersion } from "../shared/packageInfo.js";
 import { getContextData } from "../core/context/index.js";
+import { mergeModelMap } from "../core/context/models.js";
 import { cleanupExpiredCache, readCtxCache, writeCtxCache } from "../core/quota/cache.js";
 import { getCacheRoot } from "../shared/utils.js";
 import {
@@ -42,7 +43,13 @@ Usage:
   glm-quota-line config set minimalist <true|false>
   glm-quota-line config set raw-values <true|false>
   glm-quota-line config unset <style|display|theme|auth-token|base-url|work-days|minimalist|raw-values>
+  glm-quota-line config reset [--models] [--yes]
   glm-quota-line config show
+  glm-quota-line model list
+  glm-quota-line model get <model-id>
+  glm-quota-line model set <model-id> <size>
+  glm-quota-line model remove <model-id>
+  echo '<json>' | glm-quota-line model import
   glm-quota-line configure
 
 When run without arguments, displays comprehensive quota usage (5h, week, MCP)
@@ -60,7 +67,16 @@ Commands:
   config show             Print the current persisted config. Stored tokens are redacted.
   config set ...          Persist a display option or manual credential override.
   config unset ...        Remove one persisted config key.
+  config reset            Reset user config to defaults. --models limits to model mappings.
+                          Preserves install state. Prompts unless --yes.
   configure               Launch interactive TUI for component and global configuration.
+
+Model commands:
+  model list              List all models and their context window sizes.
+  model get <id>          Show the context window size for a model.
+  model set <id> <size>   Set a model's context window size (e.g. 300K or 300000).
+  model remove <id>       Remove a custom model mapping (built-in models revert to default).
+  model import            Import model mappings from stdin JSON (merge).
 
 Options:
   --style                 Output layout: text, compact, or bar (status line mode only).
@@ -81,6 +97,9 @@ Examples:
   glm-quota-line config set auth-token <your-real-token>
   glm-quota-line configure
   glm-quota-line install
+  glm-quota-line model list
+  glm-quota-line model set glm-5.2 300K
+  echo '{"glm-5.2":300000}' | glm-quota-line model import
 
 Environment:
   ANTHROPIC_AUTH_TOKEN          Auth token for Zhipu GLM API (required).
@@ -167,7 +186,8 @@ async function handleStatusLine(args, userConfig, config, statusLineInput, quota
       theme: config.theme,
       displayMode: config.displayMode,
       minimalist: userConfig.minimalist || false,
-      rawValues: userConfig.rawValues || false
+      rawValues: userConfig.rawValues || false,
+      resetFormat: userConfig.resetFormat
     },
     style: config.style,
     workDays: isValidWorkDays(userConfig.workDays) ? userConfig.workDays : undefined,
@@ -206,6 +226,9 @@ export async function main() {
 
     const statusLineInput = await readStatusLineInput();
     const userConfig = await readToolConfig();
+    if (userConfig.modelMap && typeof userConfig.modelMap === "object") {
+      mergeModelMap(userConfig.modelMap);
+    }
     const config = {
       // Stored auth/base-url must override Claude's injected env so users can
       // bypass gateway/proxy credentials when necessary.

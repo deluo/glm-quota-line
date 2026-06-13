@@ -2,7 +2,8 @@
 
 ## 1.3.1
 
-- Externalized default model table to bundled `data/models.json` — new models ship via JSON, no code/release needed
+- Model mappings are now a two-layer system: bundled `data/models.json` is the frozen base, the user's local `modelMap` overlays it at runtime. Adding a new model needs only `model set <id> <size>` — no package update required
+- Added `config reset [--models] [--yes]` — restore user config to defaults. `--models` limits the reset to custom model mappings. Preserves install state; prompts unless `--yes` (required in non-interactive sessions)
 - Updated default table: added `glm-5.2` (1M context), removed `glm-5` and `glm-5.1` (no longer in plan)
 - Hardcoded `glm-4.7` fallback remains as a defensive guard against `data/models.json` I/O failure
 

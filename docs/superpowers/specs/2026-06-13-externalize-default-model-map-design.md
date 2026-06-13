@@ -37,21 +37,25 @@ const DEFAULT_MODEL_MAP = {
 - 独立用户默认文件(用户默认表)
 - 把 `getModelSize()` 等同步 API 改成异步(波及 `getContextData` 整条链路,代价过大)
 
-## 三层模型来源(优先级从高到低)
+## 模型映射的双层结构(优先级从高到低)
 
 ```
-用户本地完整表 (modelMap)    ←  ~/.claude/glm-quota-line.json  ← 运行时默认源
+本地覆盖层 (modelMap)         ←  ~/.claude/glm-quota-line.json  ← 用户拥有,逐键覆盖
         ↑ 覆盖
-包内种子表 (data/models.json) ←  仅用于初始化/重置,运行时几乎不触达
+包内种子表 (data/models.json) ←  冻结底层,运行时自动生效,不写进用户文件
         ↑ 兜底
 硬编码 fallback              ←  models.js 内保留 glm-4.7,文件读不到时用
 ```
 
-**关键策略转向(本次澄清后):** 运行时默认源是**用户本地 `modelMap`**,不是包内表。新模型发布时用户直接编辑本地 `modelMap` 即可,完全不依赖 npm 更新。glm-quota-line **项目方后续不再维护包内模型映射的更新**,包内 `data/models.json` 仅作**初始化种子**,内容定稿后基本不动(可能仅改兜底 `glm-4.7`)。包内表的唯一用途: 新安装 / 重置 / 重新安装时,把这份种子写到用户本地。
+**关键策略(最终澄清):** 运行时解析为"包内种子打底 + 本地 `modelMap` 逐键覆盖"(`src/cli/index.js` 模块初始化 `loadBundledModels()` 后 `mergeModelMap(userConfig.modelMap)`)。**新模型发布时,用户 `model set <id> <size>` 写入本地覆盖层即可,无需 npm 更新、无需新文件。** glm-quota-line **项目方后续不再维护包内模型映射的内容更新**,`data/models.json` 是冻结的底层种子(可能仅改兜底 `glm-4.7`)。
+
+**install / reset 都不把种子写进本地 `modelMap`** —— 种子始终在运行时自动生效,写进本地只会制造 npm 更新后的过期快照,并让 `model list` 所有模型误显自定义标记 `*`。清空本地覆盖层(经 `config reset --models`)即回到纯种子状态。
+
+真正缺的不是初始化机制,而是**一个"恢复出厂"的重置入口** —— 见下文 `config reset`。
 
 ## 改动点
 
-### 1. `data/models.json`(包根目录)—— 初始化种子表
+### 1. `data/models.json`(包根目录)—— 冻结的底层种子表
 
 ```json
 {
@@ -67,18 +71,17 @@ const DEFAULT_MODEL_MAP = {
 ```
 
 > 注: 套餐中已移除 `glm-5` 和 `glm-5.1`,故不收录;`glm-5.2` 上下文为 1M(1,000,000)。
-> **此文件定稿后基本不再更新**,仅作初始化种子 + 文件丢失兜底。
+> **此文件定稿后基本不再更新**,仅作冻结底层种子 + 文件丢失兜底。
 
-### 1b. 初始化机制(新增)
+### 1b. `config reset` 命令(新增,复用 config 命名空间,不新增顶层命令)
 
-**A. `install` 自动初始化**: `glm-quota-line install` 执行时,若用户本地 `~/.claude/glm-quota-line.json` 的 `modelMap` 为空(字段不存在或为空对象 `{}`),则自动把包内种子表写入 `modelMap`。已有非空 `modelMap` 时不覆盖(保留用户自定义)。
-
-**B. `model init` 手动命令**: 用包内种子表**直接覆盖**本地 `modelMap`(本地自定义映射会丢失)。用于用户想从干净状态重新开始手编。语义: 重置覆盖。
-
-```bash
-glm-quota-line model init    # 用包内种子表重置本地 modelMap
 ```
-> 后续新模型发布只需往 `models` 对象里加一行,改 JSON 即可。
+glm-quota-line config reset [--models] [--yes]
+```
+- **默认**:重置全部用户配置(9 个全局键 + `lines` 组件布局 + `modelMap`),保留 `install` 元数据、`schemaVersion`、`managedBy`。
+- **`--models`**:只清 `modelMap`(本地覆盖层),回到纯种子状态。其它配置不动。
+- **`--yes`**:跳过交互确认(脚本/CI 用)。非交互环境(非 TTY)且未传 `--yes` 时报错退出。
+- **不触碰** `~/.claude/settings.json`(那是 `uninstall` 的职责)。
 
 ### 2. 改 `src/core/context/models.js`
 
@@ -117,63 +120,51 @@ glm-quota-line model init    # 用包内种子表重置本地 modelMap
 ]
 ```
 
-### 4. `src/cli/commands.js` —— 新增 `model init` 子命令
+### 4. `src/cli/commands.js` —— 新增 `config reset` 分支
 
-新增 `init` 子命令: 用包内种子表(`getDefaultModels()`)直接覆盖本地 `modelMap`。
+新增 `config reset` 子命令(见上文 1b),在 `config unset` 与 catch-all `config` 分支之间。配套 `handleConfigReset` 与 `confirmReset` 辅助函数:摘要构造、TTY 检测、`readline` 交互确认、非交互环境强制 `--yes`。catch-all 错误信息更新为 `show, set, unset, reset`。
 
-```bash
-glm-quota-line model init
-```
+`model list/get/set/remove/import` 其余逻辑不变。
 
-行为:
-- 读取 `getDefaultModels()`(包内 `data/models.json`,失败时 `glm-4.7` 兜底)
-- 直接写入 `~/.claude/glm-quota-line.json` 的 `modelMap`,**覆盖**已有值(本地自定义映射丢失)
-- 输出写入的条目数与配置路径
+### 5. `src/claude/settings.js` —— 新增 `resetToolConfig`
 
-`list` / `get` / `set` / `remove` / `import` 其余逻辑不变。
+新增 `resetToolConfig({ modelsOnly }, configPath)`:全量重置只留 `schemaVersion`/`managedBy`/`install`;`modelsOnly` 复刻当前配置仅删 `modelMap`。复用现有 `readToolConfig`/`writeToolConfig`。
 
-### 5. `src/claude/install.js` —— install 时自动初始化
+### 6. `src/claude/install.js` —— 无需改动
 
-在 `installClaudeStatusLine` 写回 `toolConfig` 前,插入自动初始化逻辑:
+**install 不写种子到本地**。种子在运行时由 `models.js` 模块初始化自动加载,无需 install 介入。可选:加一行注释说明此不变量,防止后续贡献者误"修复"。
 
-```js
-// 若用户本地 modelMap 为空(不存在或 {}),用包内种子表初始化
-if (!toolConfig.modelMap || Object.keys(toolConfig.modelMap).length === 0) {
-  toolConfig.modelMap = getDefaultModels();
-}
-```
+### 7. `src/cli/args.js` —— 注册 `--yes` / `--models` 布尔 flag
 
-已有非空 `modelMap` 时**不覆盖**(保留用户自定义)。这保证新安装的用户开箱即有一份完整本地表。
+仿现有 `--force`/`--json` 模式。
 
-### 6. `src/cli/index.js` —— help 文本补 `model init`
+### 8. 文档
 
-在 `model` 命令的 usage 段落加入 `init` 说明。
-
-### 7. 文档
-
-- `README.md` 的 `model` 章节: 说明运行时默认源是用户本地 `modelMap`,新模型发布时直接编辑该文件即可;`model init` 可用包内种子表重置。
-- `CHANGELOG.md` 新增条目。
+- `README.md`:新增 `reset` 章节;`model` 章节改为双层说明(新模型 `model set` 写本地即可,无需 npm 更新)。
+- `CHANGELOG.md`:1.3.1 条目改为双层说明 + `config reset`。
+- help 文本(`src/cli/index.js`):Usage + Commands 补 `config reset`。
 
 ## 数据流(改动后)
 
 ```
 status line 渲染
   └─ getContextData(input, { modelMap })            // src/core/context/index.js
-       └─ resolveWindowSize(parsed, modelMap)        // 先查传入的 user modelMap (运行时默认源)
-            └─ getModelSize(modelId)                 // user 没有则查 getDefaultModels() (包内种子,极少触达)
+       └─ resolveWindowSize(parsed, modelMap)        // 先查传入的 user modelMap (本地覆盖层)
+            └─ getModelSize(modelId)                 // user 没有则查 getDefaultModels() (包内种子)
                  └─ loadBundledModels() 优先,fallback 兜底
 ```
 
 `model list` 命令:
 ```
-readToolConfig() → config.modelMap (用户本地完整表,运行时默认源)
-getDefaultModels() → bundled ∪ fallback (种子表)
+readToolConfig() → config.modelMap (本地覆盖层)
+getDefaultModels() → bundled ∪ fallback (冻结种子)
 合并: { ...defaults, ...config.modelMap },标记 * 仅对 config.modelMap 中的项
 ```
 
-`model init` / install 初始化:
+`config reset`:
 ```
-getDefaultModels() → 包内种子表 → 写入 ~/.claude/glm-quota-line.json 的 modelMap
+全量: resetToolConfig({ modelsOnly: false }) → 只留 schemaVersion/managedBy/install
+限定: resetToolConfig({ modelsOnly: true })  → 删 modelMap,保留其余
 ```
 
 ## 错误处理
@@ -188,23 +179,28 @@ getDefaultModels() → 包内种子表 → 写入 ~/.claude/glm-quota-line.json 
 
 降级时若 `GLM_QUOTA_DEBUG=1`,向 stderr 输出一条说明(复用现有调试机制)。
 
+`config reset` 非交互环境(非 TTY)且未传 `--yes`:报错退出,不写文件。
+
 ## 测试
 
 新增 / 更新测试覆盖:
 
 - `data/models.json` 正常解析: `getDefaultModels()` 返回包内表内容
-- 三层合并优先级: 用户 `modelMap` 覆盖包内默认覆盖 fallback
+- 双层合并优先级: 用户 `modelMap` 覆盖包内种子覆盖 fallback
 - 文件缺失: 回退到 `glm-4.7` 兜底,不抛异常
 - JSON 损坏 / 缺 `models` 字段 / `models` 非对象: 回退兜底
 - `models` 内部分项非法: 非法项跳过,合法项保留
-- `model init`: 用包内种子表覆盖本地 `modelMap`(已有自定义被覆盖)
-- install 自动初始化: 本地 `modelMap` 为空时写入种子表;非空时不覆盖
-- `model list` 三态: 包内默认无标记,用户自定义标 `*`
-- 现有 `test/context.test.js` 仍通过(数据源换了但 `getContextData` 语义一致)
+- `resetToolConfig` 全量重置: 清全局键/lines/modelMap,保留 install
+- `resetToolConfig` modelsOnly: 只删 modelMap,保留其余
+- `config reset --yes`: 全量清空并报告;`--models --yes`: 只清 modelMap
+- `config reset` 非 TTY 无 `--yes`: 报错退出,不写文件
+- `config reset` 空配置: 提示无需重置
+- `model list` 双态: 包内默认无标记,用户自定义标 `*`
+- 现有 `test/context.test.js` 仍通过
 
 ## 兼容性
 
-- 用户已有的 `~/.claude/glm-quota-line.json` 中的非空 `modelMap` 完全保留,install 不覆盖
-- 现有 `model set/get/remove/import/list` 命令行为与输出格式不变
+- 用户已有的 `~/.claude/glm-quota-line.json` 中的非空 `modelMap` 完全保留
+- 现有 `model set/get/remove/import/list`、`config set/unset/show`、`install/uninstall`、`configure` 行为不变
 - 现有 `getContextData` / 状态栏渲染行为不变
-- 老用户(空 `modelMap`)重装/升级时会被 install 自动初始化出本地表
+- 老用户开箱即用:种子在运行时自动生效,无需 install 写入

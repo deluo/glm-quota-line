@@ -12,6 +12,7 @@ import { compareVersions } from "../src/cli/update.js";
 import {
   getDisplayToolConfig,
   readToolConfig,
+  resetToolConfig,
   setToolConfigValue,
   unsetToolConfigValue
 } from "../src/claude/settings.js";
@@ -38,6 +39,16 @@ test("parseArgs accepts theme and version flags", () => {
     theme: "mono",
     version: true,
     positionals: []
+  });
+});
+
+test("parseArgs accepts --yes and --models boolean flags", () => {
+  const options = parseArgs(["config", "reset", "--models", "--yes"]);
+
+  assert.deepEqual(options, {
+    yes: true,
+    models: true,
+    positionals: ["config", "reset"]
   });
 });
 
@@ -415,5 +426,226 @@ test("model subcommand shows help for unknown action", async () => {
     { write(chunk) { output += chunk; } }
   );
   assert.match(output, /Supported model subcommands/);
+  process.exitCode = 0;
+});
+
+// --- resetToolConfig tests ---
+
+test("resetToolConfig full reset clears user config but keeps install metadata", async () => {
+  await withTempDir(async (dir) => {
+    const configPath = path.join(dir, "glm-quota-line.json");
+    await fs.writeFile(
+      configPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        managedBy: "glm-quota-line",
+        theme: "light",
+        displayMode: "used",
+        resetFormat: "countdown",
+        authToken: "real-token",
+        modelMap: { "glm-test": 100000 },
+        lines: [{ id: "main", components: [{ type: "5h", style: "bar" }] }],
+        install: { settingsPath: "/x", installed: true }
+      })
+    );
+
+    const reset = await resetToolConfig({}, configPath);
+
+    assert.equal(reset.theme, undefined);
+    assert.equal(reset.displayMode, undefined);
+    assert.equal(reset.resetFormat, undefined);
+    assert.equal(reset.authToken, undefined);
+    assert.equal(reset.modelMap, undefined);
+    assert.equal(reset.lines, undefined);
+    // install metadata preserved
+    assert.deepEqual(reset.install, { settingsPath: "/x", installed: true });
+    assert.equal(reset.schemaVersion, 1);
+    assert.equal(reset.managedBy, "glm-quota-line");
+
+    // persisted to disk
+    const reread = await readToolConfig(configPath);
+    assert.equal(reread.theme, undefined);
+    assert.deepEqual(reread.install, { settingsPath: "/x", installed: true });
+  });
+});
+
+test("resetToolConfig modelsOnly clears modelMap but keeps other config", async () => {
+  await withTempDir(async (dir) => {
+    const configPath = path.join(dir, "glm-quota-line.json");
+    await fs.writeFile(
+      configPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        managedBy: "glm-quota-line",
+        theme: "light",
+        resetFormat: "countdown",
+        modelMap: { "glm-test": 100000, "glm-other": 200000 },
+        lines: [{ id: "main", components: [{ type: "5h", style: "bar" }] }],
+        install: { installed: true }
+      })
+    );
+
+    const reset = await resetToolConfig({ modelsOnly: true }, configPath);
+
+    assert.equal(reset.modelMap, undefined);
+    // other config preserved
+    assert.equal(reset.theme, "light");
+    assert.equal(reset.resetFormat, "countdown");
+    assert.ok(Array.isArray(reset.lines));
+    assert.deepEqual(reset.install, { installed: true });
+  });
+});
+
+test("resetToolConfig preserves install when absent (empty object)", async () => {
+  await withTempDir(async (dir) => {
+    const configPath = path.join(dir, "glm-quota-line.json");
+    await fs.writeFile(configPath, JSON.stringify({ theme: "light" }));
+
+    const reset = await resetToolConfig({}, configPath);
+
+    assert.equal(reset.theme, undefined);
+    assert.equal(typeof reset.install, "object");
+    assert.equal(reset.schemaVersion, 1);
+  });
+});
+
+// --- config reset command tests ---
+
+test("config reset --yes clears all user config and reports removed keys", async () => {
+  await withTempDir(async (dir) => {
+    const configPath = path.join(dir, "glm-quota-line.json");
+    await fs.writeFile(
+      configPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        managedBy: "glm-quota-line",
+        theme: "light",
+        resetFormat: "countdown",
+        modelMap: { "glm-test": 100000 },
+        lines: [{ id: "main", components: [{ type: "5h", style: "bar" }] }],
+        install: { installed: true }
+      })
+    );
+
+    let output = "";
+    await handleCommand(
+      { positionals: ["config", "reset"], yes: true },
+      { write(chunk) { output += chunk; } },
+      { configPath }
+    );
+
+    assert.match(output, /Reset .* to defaults\./);
+    assert.match(output, /theme/);
+    assert.match(output, /component layout/);
+
+    const reread = await readToolConfig(configPath);
+    assert.equal(reread.theme, undefined);
+    assert.equal(reread.modelMap, undefined);
+    assert.equal(reread.lines, undefined);
+    assert.deepEqual(reread.install, { installed: true });
+  });
+});
+
+test("config reset --models --yes clears only modelMap", async () => {
+  await withTempDir(async (dir) => {
+    const configPath = path.join(dir, "glm-quota-line.json");
+    await fs.writeFile(
+      configPath,
+      JSON.stringify({
+        theme: "light",
+        modelMap: { "glm-test": 100000 }
+      })
+    );
+
+    let output = "";
+    await handleCommand(
+      { positionals: ["config", "reset"], models: true, yes: true },
+      { write(chunk) { output += chunk; } },
+      { configPath }
+    );
+
+    assert.match(output, /Reset 1 custom model mapping/);
+
+    const reread = await readToolConfig(configPath);
+    assert.equal(reread.modelMap, undefined);
+    assert.equal(reread.theme, "light");
+  });
+});
+
+test("config reset --models reports nothing to reset when modelMap empty", async () => {
+  await withTempDir(async (dir) => {
+    const configPath = path.join(dir, "glm-quota-line.json");
+    await fs.writeFile(configPath, JSON.stringify({ theme: "light" }));
+
+    let output = "";
+    await handleCommand(
+      { positionals: ["config", "reset"], models: true, yes: true },
+      { write(chunk) { output += chunk; } },
+      { configPath }
+    );
+
+    assert.match(output, /No custom model mappings to reset/);
+
+    const reread = await readToolConfig(configPath);
+    assert.equal(reread.theme, "light");
+  });
+});
+
+test("config reset --yes reports nothing to reset when already default", async () => {
+  await withTempDir(async (dir) => {
+    const configPath = path.join(dir, "glm-quota-line.json");
+    await fs.writeFile(configPath, JSON.stringify({ schemaVersion: 1, managedBy: "glm-quota-line" }));
+
+    let output = "";
+    await handleCommand(
+      { positionals: ["config", "reset"], yes: true },
+      { write(chunk) { output += chunk; } },
+      { configPath }
+    );
+
+    assert.match(output, /already at defaults/);
+  });
+});
+
+test("config reset without --yes in non-interactive session errors out", async () => {
+  await withTempDir(async (dir) => {
+    const configPath = path.join(dir, "glm-quota-line.json");
+    await fs.writeFile(
+      configPath,
+      JSON.stringify({ theme: "light", modelMap: { "glm-test": 100000 } })
+    );
+
+    const originalIsTTY = process.stdin.isTTY;
+    // Force non-TTY (tests run without an interactive stdin)
+    Object.defineProperty(process.stdin, "isTTY", { value: false, configurable: true });
+
+    let output = "";
+    try {
+      await handleCommand(
+        { positionals: ["config", "reset"] },
+        { write(chunk) { output += chunk; } },
+        { configPath }
+      );
+    } finally {
+      Object.defineProperty(process.stdin, "isTTY", { value: originalIsTTY, configurable: true });
+    }
+
+    assert.match(output, /pass --yes/);
+    assert.equal(process.exitCode, 1);
+    process.exitCode = 0;
+
+    // nothing written
+    const reread = await readToolConfig(configPath);
+    assert.equal(reread.theme, "light");
+  });
+});
+
+test("config subcommand help lists reset", async () => {
+  let output = "";
+  await handleCommand(
+    { positionals: ["config", "bogus"] },
+    { write(chunk) { output += chunk; } }
+  );
+  assert.match(output, /Supported config subcommands: show, set, unset, reset/);
   process.exitCode = 0;
 });

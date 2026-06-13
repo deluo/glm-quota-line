@@ -5,6 +5,7 @@ import {
   TOOL_CONFIG_MANAGED_BY,
   TOOL_CONFIG_SCHEMA_VERSION,
   isValidDisplayMode,
+  isValidResetFormat,
   isValidStatusStyle,
   isValidTheme,
   isValidWorkDays
@@ -69,6 +70,10 @@ function normalizeToolConfig(config) {
     normalized.rawValues = base.rawValues;
   }
 
+  if (isValidResetFormat(base.resetFormat)) {
+    normalized.resetFormat = base.resetFormat;
+  }
+
   const authToken = normalizeOptionalString(base.authToken);
   if (authToken) {
     normalized.authToken = authToken;
@@ -82,6 +87,19 @@ function normalizeToolConfig(config) {
   // Preserve lines (component-level config) as-is
   if (base.lines && Array.isArray(base.lines)) {
     normalized.lines = base.lines;
+  }
+
+  // Preserve modelMap (custom model context window sizes)
+  if (base.modelMap && typeof base.modelMap === "object") {
+    const validMap = {};
+    for (const [modelId, size] of Object.entries(base.modelMap)) {
+      if (typeof modelId === "string" && modelId && typeof size === "number" && size > 0 && Number.isFinite(size)) {
+        validMap[modelId] = size;
+      }
+    }
+    if (Object.keys(validMap).length > 0) {
+      normalized.modelMap = validMap;
+    }
   }
 
   return normalized;
@@ -131,4 +149,28 @@ export async function unsetToolConfigValue(key, configPath = getToolConfigPath()
   delete current[key];
   await writeToolConfig(current, configPath);
   return current;
+}
+
+// Reset user config to defaults. Preserves install metadata (does not uninstall
+// the status line), schemaVersion, and managedBy. With modelsOnly, only the
+// user modelMap overlay is cleared (bundled seed still applies at runtime).
+export async function resetToolConfig({ modelsOnly = false } = {}, configPath = getToolConfigPath()) {
+  const current = await readToolConfig(configPath);
+  const install =
+    current.install && typeof current.install === "object" ? current.install : {};
+
+  let reset;
+  if (modelsOnly) {
+    reset = { ...current };
+    delete reset.modelMap;
+  } else {
+    reset = {
+      schemaVersion: TOOL_CONFIG_SCHEMA_VERSION,
+      managedBy: TOOL_CONFIG_MANAGED_BY,
+      install
+    };
+  }
+
+  await writeToolConfig(reset, configPath);
+  return reset;
 }
