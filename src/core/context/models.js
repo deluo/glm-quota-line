@@ -20,6 +20,12 @@ const FALLBACK_MODEL_MAP = {
 
 let bundledCache = null;
 
+function debugFallback(reason) {
+  if (process.env.GLM_QUOTA_DEBUG === "1") {
+    process.stderr.write(`[ctx] Bundled models fallback to glm-4.7: ${reason}\n`);
+  }
+}
+
 function isValidModelEntry(modelId, size) {
   return (
     typeof modelId === "string" &&
@@ -41,11 +47,13 @@ export function loadBundledModels(filePath = BUNDLED_MODELS_PATH) {
     const raw = fs.readFileSync(filePath, "utf8");
     parsed = JSON.parse(raw);
   } catch {
+    debugFallback("file unreadable or invalid JSON");
     return { ...FALLBACK_MODEL_MAP };
   }
 
   const models = parsed && typeof parsed === "object" && parsed.models;
   if (!models || typeof models !== "object" || Array.isArray(models)) {
+    debugFallback("missing or non-object models field");
     return { ...FALLBACK_MODEL_MAP };
   }
 
@@ -57,6 +65,7 @@ export function loadBundledModels(filePath = BUNDLED_MODELS_PATH) {
   }
 
   if (Object.keys(valid).length === 0) {
+    debugFallback("no valid model entries");
     return { ...FALLBACK_MODEL_MAP };
   }
 
