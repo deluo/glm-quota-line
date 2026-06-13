@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "source": "https://open.bigmodel.cn/dev/api#glm",
+  "models": {
+    "glm-4.5-air": 128000,
+    "glm-4.7": 200000,
+    "glm-5-turbo": 200000,
+    "glm-5.2": 1000000
+  }
+}
