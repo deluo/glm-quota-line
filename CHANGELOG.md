@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.3.1
+
+- Externalized default model table to bundled `data/models.json` — new models ship via JSON, no code/release needed
+- Updated default table: added `glm-5.2` (1M context), removed `glm-5` and `glm-5.1` (no longer in plan)
+- Hardcoded `glm-4.7` fallback remains as a defensive guard against `data/models.json` I/O failure
+
+## 1.3.0
+
+- Added `model` subcommands: `list`, `get`, `set`, `remove`, `import` — manage model context window size mappings via CLI
+- Added `reset-format` config (`time` / `countdown`) — show reset time as countdown duration instead of time point
+- Added `modelMap` persistence in tool config — custom model sizes survive across sessions
+- Weekly quota now displays reset time (time point or countdown) alongside the progress bar
+- Context window resolution now uses local model map exclusively, ignoring stdin `context_window_size` for non-GLM models
+
 ## 1.2.0
 
 - Added interactive TUI configuration: `glm-quota-line configure` — live preview, per-component toggle and style, global options

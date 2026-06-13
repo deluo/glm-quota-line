@@ -46,7 +46,7 @@ glm-quota-line install
 安装完成。Claude Code 底部状态栏会自动显示配额：
 
 ```
-GLM Lite █████████░ 91% | W ▒▒▒▒░░░░░ 47% | 14:47 | ctx ███░░░ 45% (glm-4.7/200K)
+GLM Lite █████████░ 91% | W ▒▒▒▒░░░░░ 47% 11:10 | 14:47 | ctx ███░░░ 45% (glm-4.7/200K)
 ```
 
 也可以直接在终端运行 `glm-quota-line` 快速查看用量，无需启动 Claude Code。
@@ -66,9 +66,9 @@ glm-quota-line check-update
 
 | 值 | 说明 | 示例 |
 |---|---|---|
-| `bar`（默认） | 进度条可视化 | `GLM Lite █████████░ 91% \| W ▒▒▒▒░░░░░ 47% \| 14:47 \| ctx ███░░░ 45%` |
-| `text` | 完整文本 | `GLM Lite \| 5h 91% \| week 47% \| reset 14:47 \| ctx 45%` |
-| `compact` | 紧凑模式 | `GLM 5h 91% W 47% \| 14:47` |
+| `bar`（默认） | 进度条可视化 | `GLM Lite █████████░ 91% \| W ▒▒▒▒░░░░░ 47% 11:10 \| 14:47 \| ctx ███░░░ 45%` |
+| `text` | 完整文本 | `GLM Lite \| 5h 91% \| week 47% 11:10 \| reset 14:47 \| ctx 45%` |
+| `compact` | 紧凑模式 | `GLM 5h 91% W 47% 11:10 \| 14:47` |
 
 ```bash
 glm-quota-line config set style compact
@@ -125,8 +125,8 @@ glm-quota-line config set minimalist true
 ```
 
 效果对比：
-- 关闭：`GLM Lite █████████░ 91% | W ▒▒▒▒░░░░░ 47% | 14:47`
-- 开启：`█████████░ 91% | ▒▒▒▒░░░░░ 47% | 14:47`
+- 关闭：`GLM Lite █████████░ 91% | W ▒▒▒▒░░░░░ 47% 11:10 | 14:47`
+- 开启：`█████████░ 91% | ▒▒▒▒░░░░░ 47% 11:10 | 14:47`
 
 ### raw-values — 原始数值
 
@@ -135,6 +135,21 @@ glm-quota-line config set minimalist true
 ```bash
 glm-quota-line config set raw-values true
 ```
+
+### reset-format — 重置时间格式
+
+控制状态栏中重置时间的显示格式。
+
+| 值 | 说明 | 示例 |
+|---|---|---|
+| `time`（默认） | 显示重置时间点 | `reset 14:47` |
+| `countdown` | 显示剩余倒计时 | `reset 52m` / `reset 2d 5h` |
+
+```bash
+glm-quota-line config set reset-format countdown
+```
+
+周配额也会同步显示重置信息（时间点或倒计时）。
 
 ### --json — JSON 输出
 
@@ -198,7 +213,7 @@ glm-quota-line configure
 
 操作方式：
 - `↑↓` 选择组件，`Enter` 进入编辑，`Tab` 切换样式，`Space` 开关显示
-- `g` 进入全局选项（主题、显示模式、极简模式、原始数值）
+- `g` 进入全局选项（主题、显示模式、极简模式、原始数值、重置时间格式）
 - `s` 保存，`q` 退出
 
 组件列表：
@@ -211,6 +226,30 @@ glm-quota-line configure
 | `reset` | 重置时间 | — | ✓ |
 | `ctx` | 上下文窗口用量 | ✓ (bar/text) | ✓ |
 
+### model — 模型上下文窗口管理
+
+管理模型的上下文窗口大小映射。上下文窗口用量百分比基于此映射计算。
+
+```bash
+glm-quota-line model list                    # 查看所有模型及其上下文窗口大小
+glm-quota-line model get <model-id>          # 查看指定模型的大小
+glm-quota-line model set <model-id> <size>   # 设置模型大小（如 300K 或 300000）
+glm-quota-line model remove <model-id>       # 移除自定义映射（内置模型恢复默认值）
+echo '{"glm-5.2":300000}' | glm-quota-line model import  # 从 JSON 批量导入
+```
+
+`list` 输出示例：
+
+```
+glm-4.7        200K
+glm-5.1        200K
+glm-5.2        300K *
+```
+
+`*` 标记表示用户自定义的映射。
+
+内置默认模型表位于包内 `data/models.json`,随 npm 发布。智谱发布新模型时,升级 `glm-quota-line` 即可获得最新映射,无需手动 `model set`。
+
 ## 推荐搭配
 
 | 使用场景 | 配置 |
@@ -219,9 +258,11 @@ glm-quota-line configure
 | 浅色终端 | `style=bar`, `theme=light` |
 | 极简工作流 | `style=compact`, `theme=mono` |
 | 关注已用量 | `style=bar`, `display=used` |
+| 倒计时重置 | `reset-format=countdown` |
 | 脚本调用 | `--json` |
 | 6 天工作制 | `work-days=6` |
 | 极简数值 | `minimalist=true` |
+| 自定义模型 | `glm-quota-line model set glm-5.2 300K` |
 | 交互式配置 | `glm-quota-line configure` |
 
 ## 命令参考
@@ -234,8 +275,13 @@ glm-quota-line version
 glm-quota-line check-update
 glm-quota-line configure
 glm-quota-line config show
-glm-quota-line config set <style|display|theme|auth-token|base-url|work-days|minimalist|raw-values> <value>
+glm-quota-line config set <style|display|theme|auth-token|base-url|work-days|minimalist|raw-values|reset-format> <value>
 glm-quota-line config unset <key>
+glm-quota-line model list
+glm-quota-line model get <model-id>
+glm-quota-line model set <model-id> <size>
+glm-quota-line model remove <model-id>
+echo '<json>' | glm-quota-line model import
 ```
 
 运行 `glm-quota-line --help` 查看完整说明。
@@ -247,6 +293,7 @@ glm-quota-line config unset <key>
 - 状态栏默认显示上下文窗口用量和模型信息，可通过 `glm-quota-line configure` 交互式关闭
 - 每个组件可单独控制开关和样式，通过 `glm-quota-line configure` 交互式调整
 - 上下文窗口使用率优先从原始 token 数计算，当模型映射不可用时回退到 API 提供的百分比
+- 模型上下文窗口大小可通过 `glm-quota-line model` 命令自定义，支持查看、设置、移除和批量导入
 - 鉴权缺失返回 `GLM | auth expired`；接口异常返回 `GLM | quota unavailable`
 - 非 GLM 提供商（非智谱 AI 端点）会自动禁用配额查询
 - `install` 默认不会覆盖非本工具管理的状态栏，除非使用 `--force`
