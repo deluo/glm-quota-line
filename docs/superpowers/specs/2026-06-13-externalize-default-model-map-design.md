@@ -17,7 +17,7 @@ const DEFAULT_MODEL_MAP = {
 };
 ```
 
-开箱即用只认这 5 个旧模型。当智谱发布新模型(如 `glm-5.2`)时,用户必须**手动** `glm-quota-line model set glm-5.2 300K` 才能让上下文窗口百分比算准,否则回退到 API 百分比或无法显示。
+开箱即用只认这 5 个旧模型,且已过时 —— 套餐中已移除 `glm-5.1`,而新模型 `glm-5.2`(1M 上下文)尚未收录。当智谱发布新模型时,用户必须**手动** `glm-quota-line model set glm-5.2 1000000` 才能让上下文窗口百分比算准,否则回退到 API 百分比或无法显示。
 
 现状中**已经可配置**、本次**不动**的部分:
 
@@ -60,22 +60,25 @@ const DEFAULT_MODEL_MAP = {
     "glm-4.7": 200000,
     "glm-5-turbo": 200000,
     "glm-5": 200000,
-    "glm-5.1": 200000
+    "glm-5.2": 1000000
   }
 }
 ```
 
-后续新模型发布只需往 `models` 对象里加一行,改 JSON 即可。
+> 注: 套餐中已移除 `glm-5.1`,故不收录;`glm-5.2` 上下文为 1M(1,000,000)。
+> 后续新模型发布只需往 `models` 对象里加一行,改 JSON 即可。
 
 ### 2. 改 `src/core/context/models.js`
 
-- `DEFAULT_MODEL_MAP` 降级为**极小兜底表**,仅保留 `glm-4.7` 一项:
+- `DEFAULT_MODEL_MAP` 降级为**极小兜底表** `FALLBACK_MODEL_MAP`,仅保留 `glm-4.7` 一项:
 
   ```js
   const FALLBACK_MODEL_MAP = {
     "glm-4.7": 200_000
   };
   ```
+
+  > **兜底表的职责**: 仅作 **`data/models.json` 文件 I/O 失败时的防御性保险**(文件缺失 / 损坏 / 字段异常),保证代码不崩。它**不是**用来防"用户删光模型映射"的 —— 用户层的 `model remove` 只删 `~/.claude/glm-quota-line.json` 的 `modelMap`,删不掉包内 `data/models.json`,所以用户即便清空自定义映射,`getDefaultModels()` 仍返回完整的包内默认表。npm 包正常分发时 `data/models.json` 永远在,兜底几乎不会触发。
 
 - 新增 `loadBundledModels()` —— **同步**读取 `data/models.json`(用 `fs.readFileSync` + `import.meta.url` 定位包根)。模块级缓存,首次读取后复用,零运行时开销。
 
