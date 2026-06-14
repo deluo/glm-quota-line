@@ -333,3 +333,31 @@ test("rawValues mode hides model label in bar style", () => {
   assert.equal(text.includes("GLM Lite"), false);
   assert.ok(text.includes("80"));
 });
+
+// --- reset time and bar tone ---
+
+function makeTimeAtHour(hour) {
+  const d = new Date();
+  d.setHours(hour, 30, 0, 0);
+  return d.getTime();
+}
+
+test("reset time uses reset tone", () => {
+  const output = formatStatus(
+    {
+      kind: "success",
+      level: "lite",
+      display: "percent",
+      leftPercent: 80,
+      usedPercent: 20,
+      nextResetTime: 1774939627716
+    },
+    {
+      style: "bar",
+      theme: "dark",
+      now: makeTimeAtHour(15)
+    }
+  );
+  assert.match(output, /\[38;2;119;209;208m14:47\[0m/);
+  assert.match(output, /\[38;2;70;148;175m.*80%\[0m/);
+});

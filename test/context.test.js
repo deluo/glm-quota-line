@@ -4,19 +4,17 @@ import assert from "node:assert/strict";
 import {
   calculateFromTokens,
   getSeverity,
-  calculateTokenCount,
-  isValidPercentages,
-  completePercentages
+  calculateTokenCount
 } from "../src/core/context/calculator.js";
 import {
   parseTokenUsage,
-  parseApiPercentages,
   parseModelId,
   parseContextInput
 } from "../src/core/context/parser.js";
 import {
   getModelSize,
   setModelSize,
+  removeModel,
   resetModels,
   mergeModelMap,
   getDefaultModels
@@ -80,23 +78,6 @@ test("calculateTokenCount computes correct token count", () => {
   assert.equal(calculateTokenCount(0, 200000), 0);
 });
 
-test("isValidPercentages validates percentage objects", () => {
-  assert.equal(isValidPercentages({ used: 50, remaining: 50 }), true);
-  assert.equal(isValidPercentages({ used: 0, remaining: 100 }), true);
-  assert.equal(isValidPercentages({ used: 100, remaining: 0 }), true);
-  assert.equal(isValidPercentages({ used: -1, remaining: 101 }), false);
-  assert.equal(isValidPercentages(null), false);
-  assert.equal(isValidPercentages({}), false); // undefined values are invalid
-  assert.equal(isValidPercentages({ used: null, remaining: null }), false); // both null means no usable data
-  assert.equal(isValidPercentages({ used: NaN, remaining: 50 }), false);
-});
-
-test("completePercentages fills in missing values", () => {
-  assert.deepEqual(completePercentages({ used: 30, remaining: null }), { used: 30, remaining: 70 });
-  assert.deepEqual(completePercentages({ used: null, remaining: 60 }), { used: 40, remaining: 60 });
-  assert.deepEqual(completePercentages({ used: 50, remaining: 50 }), { used: 50, remaining: 50 });
-});
-
 // --- parser tests ---
 
 test("parseTokenUsage extracts and sums token values", () => {
@@ -122,23 +103,6 @@ test("parseTokenUsage returns null for invalid input", () => {
   assert.deepEqual(result, { input: 0, output: 0, cacheRead: 0, cacheCreation: 0, total: 0 }); // output not in total
 });
 
-test("parseApiPercentages extracts and validates percentages", () => {
-  const result = parseApiPercentages(MOCK_CONTEXT_WINDOW);
-  assert.equal(result.used, 45);
-  assert.equal(result.remaining, 55);
-});
-
-test("parseApiPercentages clamps values to 0-100", () => {
-  const result = parseApiPercentages({ used_percentage: 150, remaining_percentage: -10 });
-  assert.equal(result.used, 100);
-  assert.equal(result.remaining, 0);
-});
-
-test("parseApiPercentages returns null when both values are missing", () => {
-  assert.equal(parseApiPercentages({ used_percentage: null }), null);
-  assert.equal(parseApiPercentages({}), null);
-});
-
 test("parseModelId extracts model ID from status input", () => {
   assert.equal(parseModelId(MOCK_STATUS_INPUT), "glm-4.7");
   assert.equal(parseModelId({}), undefined);
@@ -155,7 +119,6 @@ test("parseContextInput returns complete parsed structure", () => {
     cacheCreation: 100,
     total: 1300
   });
-  assert.deepEqual(result.apiPercentages, { used: 45, remaining: 55 });
 });
 
 test("parseContextInput returns null for missing context_window", () => {
@@ -214,6 +177,33 @@ test("getDefaultModels returns copy of default mappings", () => {
   assert.equal(getModelSize("glm-4.7"), 200000); // original unchanged
 });
 
+test("removeModel deletes a custom model from runtime map", () => {
+  resetModels();
+  setModelSize("custom-model", 50000);
+  assert.equal(getModelSize("custom-model"), 50000);
+  assert.equal(removeModel("custom-model"), true);
+  assert.equal(getModelSize("custom-model"), undefined);
+  resetModels();
+});
+
+test("removeModel deletes a built-in model from runtime map", () => {
+  resetModels();
+  assert.equal(getModelSize("glm-4.7"), 200000);
+  assert.equal(removeModel("glm-4.7"), true);
+  assert.equal(getModelSize("glm-4.7"), undefined);
+  resetModels();
+});
+
+test("removeModel returns false for unknown model", () => {
+  resetModels();
+  assert.equal(removeModel("nonexistent"), false);
+});
+
+test("removeModel validates input", () => {
+  assert.equal(removeModel(""), false);
+  assert.equal(removeModel(123), false);
+});
+
 // --- index (integration) tests ---
 
 test("getContextData returns complete context data with token calculation", () => {
@@ -225,14 +215,40 @@ test("getContextData returns complete context data with token calculation", () =
   assert.equal(result.severity, "good");
 });
 
-test("getContextData falls back to API percentages when token calculation fails", () => {
+test("getContextData strips [1M] suffix: resolves window size and normalizes modelId", () => {
+  // Claude Code reports the model id with a trailing bracket suffix (glm-5.2[1M]);
+  // the model map keys the bare id (glm-5.2). Lookup and the returned modelId
+  // must both use the bare id so display reads "glm-5.2 / 1M".
+  const input = {
+    model: { id: "glm-5.2[1M]" },
+    context_window: {
+      // Token volume large enough that usage rounds above 0% against the 1M
+      // window (otherwise the result is dropped as a 0% placeholder).
+      current_usage: {
+        input_tokens: 50000,
+        output_tokens: 0,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0
+      },
+      used_percentage: 45,
+      remaining_percentage: 55
+    }
+  };
+  const result = getContextData(input);
+  assert.equal(result.modelId, "glm-5.2");
+  assert.equal(result.windowSize, 1000000);
+});
+
+test("getContextData returns null when model id is not in the map (no stdin percentage fallback)", () => {
+  // An unknown model id cannot resolve a window size, so no context segment is
+  // shown. stdin-provided window percentages are intentionally NOT used as a
+  // fallback — they are often inaccurate. The contract is: no model map hit,
+  // no context segment.
   const inputWithoutTokenUsage = {
     model: { id: "unknown-model" },
     context_window: MOCK_CONTEXT_WINDOW
   };
-  const result = getContextData(inputWithoutTokenUsage);
-  assert.equal(result.usedPercent, 45);
-  assert.equal(result.remainingPercent, 55);
+  assert.equal(getContextData(inputWithoutTokenUsage), null);
 });
 
 test("getContextData returns null when no calculation is possible", () => {
@@ -304,7 +320,10 @@ test("parseTokenUsage total is input + cache only (no output_tokens)", () => {
   assert.equal(result.total, 55500); // 50000 + 5000 + 500
 });
 
-test("getContextData uses API percentage when token calculation returns 0%", () => {
+test("getContextData returns null when token calculation yields 0% (no stdin percentage fallback)", () => {
+  // Zero token total is a Claude Code placeholder. Previously this fell back to
+  // stdin used_percentage; now it returns null (context segment hidden) because
+  // stdin window percentages are not trusted.
   const input = {
     model: { id: "glm-4.7" },
     context_window: {
@@ -313,12 +332,10 @@ test("getContextData uses API percentage when token calculation returns 0%", () 
       remaining_percentage: 70
     }
   };
-  const result = getContextData(input);
-  assert.equal(result.usedPercent, 30);
-  assert.equal(result.remainingPercent, 70);
+  assert.equal(getContextData(input), null);
 });
 
-test("getContextData prefers stdin context_window_size over model map", () => {
+test("getContextData ignores stdin context_window_size, uses model map", () => {
   const input = {
     model: { id: "glm-4.7" },
     context_window: {
@@ -328,8 +345,8 @@ test("getContextData prefers stdin context_window_size over model map", () => {
     }
   };
   const result = getContextData(input);
-  assert.equal(result.usedPercent, 50); // 64000 / 128000
-  assert.equal(result.windowSize, 128000);
+  assert.equal(result.usedPercent, 32); // 64000 / 200000 (model map, not stdin)
+  assert.equal(result.windowSize, 200000);
 });
 
 test("getContextData falls back to model map when stdin has no context_window_size", () => {
@@ -344,61 +361,12 @@ test("getContextData falls back to model map when stdin has no context_window_si
   assert.equal(result.windowSize, 200000);
 });
 
-test("parseContextInput extracts contextWindowSize when present", () => {
-  const input = {
-    model: { id: "glm-4.7" },
-    context_window: {
-      context_window_size: 128000,
-      current_usage: { input_tokens: 100 },
-      used_percentage: 10
-    }
-  };
-  const result = parseContextInput(input);
-  assert.equal(result.contextWindowSize, 128000);
-});
-
-test("parseContextInput returns null contextWindowSize when not provided", () => {
-  const input = {
-    model: { id: "glm-4.7" },
-    context_window: {
-      current_usage: { input_tokens: 100 }
-    }
-  };
-  const result = parseContextInput(input);
-  assert.equal(result.contextWindowSize, null);
-});
-
 // --- regression tests for audit fixes ---
 
-test("isValidPercentages rejects both used and remaining null", () => {
-  assert.equal(isValidPercentages({ used: null, remaining: null }), false);
-});
-
-test("completePercentages normalizes when sum exceeds 100", () => {
-  const result = completePercentages({ used: 80, remaining: 80 });
-  assert.equal(result.used, 80);
-  assert.equal(result.remaining, 20);
-});
-
-test("completePercentages normalizes when sum is below 99", () => {
-  const result = completePercentages({ used: 30, remaining: 30 });
-  assert.equal(result.used, 30);
-  assert.equal(result.remaining, 70);
-});
-
-test("completePercentages preserves valid pairs within tolerance", () => {
-  const result = completePercentages({ used: 60, remaining: 40 });
-  assert.equal(result.used, 60);
-  assert.equal(result.remaining, 40);
-});
-
-test("completePercentages preserves pairs within ±1 tolerance", () => {
-  const result = completePercentages({ used: 50, remaining: 51 });
-  assert.equal(result.used, 50);
-  assert.equal(result.remaining, 51);
-});
-
-test("getContextData returns null when API percentages are both null", () => {
+test("getContextData returns null for unknown model with no token usage", () => {
+  // Unknown model (not in the map) and no usable token usage: no window size
+  // can be resolved, so the context segment is hidden. stdin percentages are
+  // irrelevant here — they are never used as a fallback.
   const input = {
     model: { id: "unknown-model" },
     context_window: {
@@ -439,7 +407,7 @@ test("getContextData uses custom modelMap for windowSize", () => {
   assert.equal(result.windowSize, 100000);
 });
 
-test("getContextData uses contextWindowSize override over modelMap", () => {
+test("getContextData uses model map for window size", () => {
   const input = {
     model: { id: "glm-4.7" },
     context_window: {
@@ -449,6 +417,6 @@ test("getContextData uses contextWindowSize override over modelMap", () => {
     }
   };
   const result = getContextData(input);
-  assert.equal(result.usedPercent, 50);
-  assert.equal(result.windowSize, 50000);
+  assert.equal(result.usedPercent, 13); // 25000 / 200000 (from model map)
+  assert.equal(result.windowSize, 200000);
 });

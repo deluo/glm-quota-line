@@ -27,7 +27,8 @@ export const DEFAULT_GLOBAL_CONFIG = {
   separator: " | ",
   padding: { left: 0, right: 0 },
   minimalist: false,
-  rawValues: false
+  rawValues: false,
+  resetFormat: "time"
 };
 
 export const DEFAULT_LINES = [
@@ -84,6 +85,10 @@ export function isValidTheme(value) {
 
 export function isValidWorkDays(value) {
   return Number.isInteger(value) && value >= 1 && value <= 7;
+}
+
+export function isValidResetFormat(value) {
+  return value === "time" || value === "countdown";
 }
 
 export function normalizeDisplayMode(value) {
@@ -176,7 +181,9 @@ export function normalizeConfig(config) {
       ...(isValidTheme(config?.theme) ? { theme: config.theme } : {}),
       ...(isValidDisplayMode(config?.displayMode) ? { displayMode: config.displayMode } : {}),
       ...(typeof config?.global?.minimalist === "boolean" ? { minimalist: config.global.minimalist } : {}),
-      ...(typeof config?.global?.rawValues === "boolean" ? { rawValues: config.global.rawValues } : {})
+      ...(typeof config?.global?.rawValues === "boolean" ? { rawValues: config.global.rawValues } : {}),
+      ...(isValidResetFormat(config?.resetFormat) ? { resetFormat: config.resetFormat } : {}),
+      ...(isValidResetFormat(config?.global?.resetFormat) ? { resetFormat: config.global.resetFormat } : {})
     };
     const lines = structuredClone(DEFAULT_LINES).map(line => ({
       ...line,
@@ -189,6 +196,9 @@ export function normalizeConfig(config) {
   }
 
   const global = { ...DEFAULT_GLOBAL_CONFIG, ...config.global };
+  if (!isValidResetFormat(global.resetFormat)) {
+    global.resetFormat = DEFAULT_GLOBAL_CONFIG.resetFormat;
+  }
   const lines = config.lines.map(line => ({
     ...line,
     components: line.components.map(comp =>

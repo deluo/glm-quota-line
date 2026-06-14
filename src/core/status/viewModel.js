@@ -19,6 +19,33 @@ function formatResetTime(timestampMs) {
   return `${padTwoDigits(date.getHours())}:${padTwoDigits(date.getMinutes())}`;
 }
 
+function formatResetCountdown(timestampMs, nowMs) {
+  if (!Number.isFinite(timestampMs) || !Number.isFinite(nowMs)) {
+    return null;
+  }
+
+  const remainingMs = timestampMs - nowMs;
+  if (remainingMs <= 0) {
+    return null;
+  }
+
+  const totalMinutes = Math.floor(remainingMs / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24);
+    const remainHours = hours % 24;
+    return `${days}d ${remainHours}h`;
+  }
+
+  if (hours > 0) {
+    return `${hours}h ${padTwoDigits(minutes)}m`;
+  }
+
+  return `${minutes}m`;
+}
+
 function getQuotaSeverity(leftPercent) {
   if (!Number.isFinite(leftPercent)) {
     return "neutral";
@@ -169,6 +196,10 @@ export function buildStatusViewModel(result, options = {}) {
     ? getWeeklyInfo(secondaryQuota.leftPercent, secondaryQuota.nextResetTime, options.workDays, now)
     : { severity: "neutral", theoreticalBudget: null };
 
+  const formatReset = options.resetFormat === "countdown"
+    ? (ts) => formatResetCountdown(ts, now)
+    : formatResetTime;
+
   return {
     kind: "success",
     levelLabel: formatLevel(result.level),
@@ -177,7 +208,8 @@ export function buildStatusViewModel(result, options = {}) {
     secondaryQuota,
     secondarySeverity: weeklyInfo.severity,
     secondaryTheoreticalBudget: weeklyInfo.theoreticalBudget,
-    resetText: formatResetTime(primaryQuota.nextResetTime),
+    resetText: formatReset(primaryQuota.nextResetTime),
+    weeklyResetText: formatReset(secondaryQuota?.nextResetTime),
     severity: getQuotaSeverity(primaryQuota.leftPercent)
   };
 }

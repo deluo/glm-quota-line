@@ -112,17 +112,13 @@ async function readExistingCache(cacheFilePath) {
 }
 
 async function writeCache(cacheFilePath, cache) {
-  const existing = await readExistingCache(cacheFilePath);
-  const ctx = cache.ctx || (existing?.ctx) || undefined;
-
   const payload = JSON.stringify(
     {
       ...(Number.isFinite(cache.savedAt) ? { savedAt: cache.savedAt } : {}),
       ...(Number.isFinite(cache.lastAttemptAt) ? { lastAttemptAt: cache.lastAttemptAt } : {}),
       ...(cache.sessionId ? { sessionId: cache.sessionId } : {}),
       ...(cache.lastFailureKind ? { lastFailureKind: cache.lastFailureKind } : {}),
-      ...(cache.result ? { result: cache.result } : {}),
-      ...(ctx ? { ctx } : {})
+      ...(cache.result ? { result: cache.result } : {})
     },
     null,
     2
@@ -238,36 +234,4 @@ export async function cleanupExpiredCache(options = {}) {
     }
     throw error;
   }
-}
-
-function isValidCtxShape(value) {
-  return value && typeof value === "object" && Number.isFinite(value.usedPercent);
-}
-
-export async function readCtxCache(cacheFilePath, sessionId) {
-  const raw = await readExistingCache(cacheFilePath);
-  if (!raw) return null;
-
-  const ctx = raw.ctx;
-  if (!isValidCtxShape(ctx)) return null;
-
-  if (sessionId && raw.sessionId !== sessionId) return null;
-
-  return ctx;
-}
-
-export async function writeCtxCache(cacheFilePath, ctxData) {
-  const existing = await readExistingCache(cacheFilePath) || {};
-
-  existing.ctx = ctxData;
-
-  await fs.mkdir(path.dirname(cacheFilePath), { recursive: true });
-  await fs.writeFile(cacheFilePath, JSON.stringify(existing, null, 2), "utf8");
-}
-
-export async function clearCtxCache(cacheFilePath) {
-  const existing = await readExistingCache(cacheFilePath);
-  if (!existing || !existing.ctx) return;
-  delete existing.ctx;
-  await fs.writeFile(cacheFilePath, JSON.stringify(existing, null, 2), "utf8");
 }

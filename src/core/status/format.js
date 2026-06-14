@@ -6,9 +6,12 @@ import {
   COMPONENT_TYPES,
   normalizeConfig
 } from "../../shared/constants.js";
+import { buildBar } from "../../shared/bar.js";
 import { applyTheme } from "./theme.js";
 import { buildStatusViewModel } from "./viewModel.js";
 import { createRenderData } from "../context/index.js";
+
+export { buildBar };
 
 class ComponentRenderer {
   constructor(model, globalConfig, style) {
@@ -121,13 +124,14 @@ class WeeklyQuotaRenderer extends ComponentRenderer {
     const tone = this.model.secondarySeverity;
     const style = this.style || "bar";
     const showLabel = this.shouldShowLabel();
+    const resetText = this.model.weeklyResetText;
 
     if (style === "bar") {
       const metric = this.barMetric(quota);
 
       if (Number.isFinite(this.model.secondaryTheoreticalBudget)) {
         const barData = buildWeeklyBar(quota.usedPercent, this.model.secondaryTheoreticalBudget);
-        return [
+        const segments = [
           { text: `${quota.compactLabel} `, tone: "muted" },
           { text: barData.filledText, tone },
           { text: barData.shadeText, tone: `shade_${tone}` },
@@ -135,26 +139,41 @@ class WeeklyQuotaRenderer extends ComponentRenderer {
           { text: " ", tone: "plain" },
           { text: metric.text, tone }
         ];
+        if (resetText) {
+          segments.push({ text: ` ${resetText}`, tone: "reset" });
+        }
+        return segments;
       }
 
-      // No theoretical budget: plain text fallback
-      return [
+      const segments = [
         { text: `${quota.compactLabel} `, tone: "muted" },
         { text: quota.leftText, tone }
       ];
+      if (resetText) {
+        segments.push({ text: ` ${resetText}`, tone: "reset" });
+      }
+      return segments;
     }
 
     if (style === "compact") {
-      return [
+      const segments = [
         { text: `${quota.compactLabel} `, tone: "muted" },
         { text: quota.leftText, tone }
       ];
+      if (resetText) {
+        segments.push({ text: ` ${resetText}`, tone: "reset" });
+      }
+      return segments;
     }
 
-    return [
+    const segments = [
       { text: `${quota.label} `, tone: "muted" },
       { text: quota.leftText, tone }
     ];
+    if (resetText) {
+      segments.push({ text: ` ${resetText}`, tone: "reset" });
+    }
+    return segments;
   }
 }
 
@@ -166,17 +185,18 @@ class ResetTimeRenderer extends ComponentRenderer {
 
     const style = this.style;
     const showLabel = this.shouldShowLabel() && style !== "bar" && style !== "compact";
+    const resetTone = "reset";
 
     if (showLabel) {
       return [
         { text: " | reset ", tone: "muted" },
-        { text: this.model.resetText, tone: "reset" }
+        { text: this.model.resetText, tone: resetTone }
       ];
     }
 
     return [
       { text: " | ", tone: "muted" },
-      { text: this.model.resetText, tone: "reset" }
+      { text: this.model.resetText, tone: resetTone }
     ];
   }
 }
@@ -263,27 +283,6 @@ class StatusLineRenderer {
   }
 }
 
-export function buildBar(percent, characters = STATUS_BAR_CHARACTERS, width = 10) {
-  const safePercent = Math.min(100, Math.max(0, percent));
-  let filledUnits;
-
-  if (safePercent <= 0) {
-    filledUnits = 0;
-  } else if (safePercent >= 100) {
-    filledUnits = width;
-  } else {
-    filledUnits = Math.min(width - 1, Math.max(1, Math.floor((safePercent / 100) * width)));
-  }
-
-  return {
-    width,
-    filledUnits,
-    emptyUnits: width - filledUnits,
-    filledText: characters.filled.repeat(filledUnits),
-    emptyText: characters.empty.repeat(width - filledUnits)
-  };
-}
-
 export function buildWeeklyBar(usedPercent, theoreticalBudget, width = 10) {
   const safeUsed = Math.min(100, Math.max(0, usedPercent));
   const safeBudget = Math.min(100, Math.max(0, theoreticalBudget));
@@ -329,9 +328,13 @@ export function formatStatus(result, options = {}) {
     ? (options.global?.style || options.style)
     : undefined;
   const theme = normalizeTheme(options.global?.theme || options.theme);
+
+  const normalizedConfig = normalizeConfig(options);
+
   const model = buildStatusViewModel(result, {
     workDays: options.global?.workDays || options.workDays,
-    now: options.now
+    now: options.now,
+    resetFormat: normalizedConfig.global.resetFormat
   });
 
   if (model.kind === "unavailable") return "";
@@ -339,7 +342,6 @@ export function formatStatus(result, options = {}) {
     return applyTheme(createErrorSegments(model), { theme });
   }
 
-  const normalizedConfig = normalizeConfig(options);
   const resolvedStyle = style || normalizedConfig.global._style || "bar";
 
   if (resolvedStyle === "bar" || resolvedStyle === "compact") {

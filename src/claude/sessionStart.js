@@ -1,5 +1,4 @@
 import { loadConfig } from "../shared/config.js";
-import { clearCtxCache } from "../core/quota/cache.js";
 import { resolveQuotaStatus } from "../core/quota/service.js";
 import { readStatusLineInput } from "./input.js";
 import { readToolConfig } from "./settings.js";
@@ -15,10 +14,6 @@ export async function refreshQuotaOnSessionStart(options = {}) {
     ...(await loadConfigFn(options.env ?? process.env, userConfig)),
     sessionId: hookInput?.session_id || ""
   };
-
-  if (hookInput?.source === "compact" || hookInput?.source === "clear" || hookInput?.source === "startup") {
-    await clearCtxCache(config.cacheFilePath).catch(() => {});
-  }
 
   return resolveQuotaStatusFn(config, {
     now: options.now,

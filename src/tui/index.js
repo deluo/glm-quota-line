@@ -51,7 +51,8 @@ function render(config, compIndex, editMode, showGlobal, globalIndex, message) {
       { label: "Theme", value: g.theme },
       { label: "Display", value: g.displayMode },
       { label: "Minimalist", value: g.minimalist ? "ON" : "OFF" },
-      { label: "Raw Values", value: g.rawValues ? "ON" : "OFF" }
+      { label: "Raw Values", value: g.rawValues ? "ON" : "OFF" },
+      { label: "Reset Format", value: g.resetFormat }
     ];
     lines.push(`  ${colors.title}Global Options:${ANSI.reset}`);
     lines.push("");
@@ -97,7 +98,7 @@ function render(config, compIndex, editMode, showGlobal, globalIndex, message) {
 
   lines.push("");
   if (showGlobal) {
-    lines.push(`  ${colors.title}[Space]${ANSI.reset} change   ${colors.enabled}[g]${ANSI.reset} back   ${colors.error}[q]${ANSI.reset} quit`);
+    lines.push(`  ${colors.title}[Space]${ANSI.reset} change   ${colors.enabled}[s]${ANSI.reset} save   ${colors.enabled}[g]${ANSI.reset} back   ${colors.error}[q]${ANSI.reset} quit`);
   } else if (editMode) {
     lines.push(`  ${colors.title}[Tab]${ANSI.reset} style   ${colors.enabled}[Space]${ANSI.reset} show/hide   ${colors.error}[Esc]${ANSI.reset} done`);
   } else {
@@ -162,7 +163,7 @@ export async function runTUI() {
         return;
       }
 
-      if (key.name === "s" && !showGlobal && !editMode) {
+      if (key.name === "s" && !editMode) {
         (async () => {
           try {
             await saveTUIConfig(config);
@@ -191,13 +192,13 @@ export async function runTUI() {
           return;
         }
         if (key.name === "down") {
-          globalIndex = Math.min(3, globalIndex + 1);
+          globalIndex = Math.min(4, globalIndex + 1);
           draw();
           return;
         }
         if (key.name === "space" || str === " ") {
           dirty = true;
-          const opts = ["theme", "displayMode", "minimalist", "rawValues"];
+          const opts = ["theme", "displayMode", "minimalist", "rawValues", "resetFormat"];
           const k = opts[globalIndex];
           if (k === "theme") {
             config.global.theme = THEMES[(THEMES.indexOf(config.global.theme) + 1) % THEMES.length];
@@ -207,6 +208,8 @@ export async function runTUI() {
             config.global.minimalist = !config.global.minimalist;
           } else if (k === "rawValues") {
             config.global.rawValues = !config.global.rawValues;
+          } else if (k === "resetFormat") {
+            config.global.resetFormat = config.global.resetFormat === "countdown" ? "time" : "countdown";
           }
           draw();
           return;
@@ -265,5 +268,6 @@ export async function saveTUIConfig(config, configPath) {
   if (config.global.displayMode !== DEFAULT_GLOBAL_CONFIG.displayMode) toolConfig.displayMode = config.global.displayMode;
   if (config.global.minimalist !== DEFAULT_GLOBAL_CONFIG.minimalist) toolConfig.minimalist = config.global.minimalist;
   if (config.global.rawValues !== DEFAULT_GLOBAL_CONFIG.rawValues) toolConfig.rawValues = config.global.rawValues;
+  if (config.global.resetFormat !== DEFAULT_GLOBAL_CONFIG.resetFormat) toolConfig.resetFormat = config.global.resetFormat;
   await writeToolConfig(toolConfig, configPath);
 }

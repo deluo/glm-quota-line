@@ -1,19 +1,21 @@
 # Changelog
 
-## 1.3.1
-
-- Model mappings are now a two-layer system: bundled `data/models.json` is the frozen base, the user's local `modelMap` overlays it at runtime. Adding a new model needs only `model set <id> <size>` — no package update required
-- Added `config reset [--models] [--yes]` — restore user config to defaults. `--models` limits the reset to custom model mappings. Preserves install state; prompts unless `--yes` (required in non-interactive sessions)
-- Updated default table: added `glm-5.2` (1M context), removed `glm-5` and `glm-5.1` (no longer in plan)
-- Hardcoded `glm-4.7` fallback remains as a defensive guard against `data/models.json` I/O failure
-
 ## 1.3.0
 
-- Added `model` subcommands: `list`, `get`, `set`, `remove`, `import` — manage model context window size mappings via CLI
-- Added `reset-format` config (`time` / `countdown`) — show reset time as countdown duration instead of time point
+- Added `commands` subcommand: list every command with a machine-readable schema via `--json` (name / summary / sideEffect / args / examples), for AI agents and scripting
+- Added per-subcommand `--help` (e.g. `model --help`, `config set --help`) — focused help derived from a single command registry
+- **User-customizable model mapping table** — model context window sizes are now managed by the user at runtime. The bundled `data/models.json` is just a frozen base; your local `modelMap` overlays it, so adapting to a new model (e.g. `glm-5.2` with 1M context) needs only `model set <id> <size>` — no package update or upgrade required
+- Added `model` subcommands: `list`, `get`, `set`, `remove` — manage model context window size mappings via CLI
 - Added `modelMap` persistence in tool config — custom model sizes survive across sessions
+- Added `config reset [--models] [--yes]` — restore user config to defaults. `--models` limits the reset to custom model mappings. Preserves install state; prompts unless `--yes` (required in non-interactive sessions)
+- Model ids reported with a bracket suffix (e.g. `glm-5.2[1M]`) are now normalized to the bare id for lookup and display
+- Updated default table: added `glm-5.2` (1M context), removed `glm-5` and `glm-5.1` (no longer in plan)
+- Added `reset-format` config (`time` / `countdown`) — show reset time as countdown duration instead of time point
 - Weekly quota now displays reset time (time point or countdown) alongside the progress bar
-- Context window resolution now uses local model map exclusively, ignoring stdin `context_window_size` for non-GLM models
+- Context window resolution now relies solely on the local model map: stdin `context_window_size` is ignored, and stdin-provided window percentages are no longer used as a fallback (they are often inaccurate). If the current model id is not in the map, the context segment is simply not shown rather than guessing
+- ctx cache now keyed by session id + model id: token usage can be 0 or missing on individual status-line frames (session start, between requests), which would make the context segment flash. The cache falls back to the last valid value for the same session and model so the display stays stable — a stale value from a different session or model is never shown
+- Refactored command dispatch into `configCommand.js` / `modelCommand.js`, and extracted a shared `bar.js` and a context-scoped `cache.js`. No behavior change
+- Hardcoded `glm-4.7` fallback remains as a defensive guard against `data/models.json` I/O failure
 
 ## 1.2.0
 

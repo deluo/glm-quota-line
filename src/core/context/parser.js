@@ -30,28 +30,6 @@ export function parseTokenUsage(currentUsage) {
   return { input: safeInput, output: safeOutput, cacheRead: safeCacheRead, cacheCreation: safeCacheCreation, total };
 }
 
-export function parseApiPercentages(contextWindow) {
-  if (!contextWindow || typeof contextWindow !== "object") {
-    return null;
-  }
-
-  const usedRaw = contextWindow.used_percentage;
-  const remainingRaw = contextWindow.remaining_percentage;
-
-  const used = typeof usedRaw === "number" && Number.isFinite(usedRaw)
-    ? Math.max(0, Math.min(100, usedRaw))
-    : null;
-  const remaining = typeof remainingRaw === "number" && Number.isFinite(remainingRaw)
-    ? Math.max(0, Math.min(100, remainingRaw))
-    : null;
-
-  if (used === null && remaining === null) {
-    return null;
-  }
-
-  return { used, remaining };
-}
-
 export function parseModelId(input) {
   if (!input || typeof input !== "object") {
     return undefined;
@@ -69,17 +47,8 @@ export function parseContextInput(input) {
     return null;
   }
 
-  const contextWindowSize =
-    typeof contextWindow.context_window_size === "number" &&
-    Number.isFinite(contextWindow.context_window_size) &&
-    contextWindow.context_window_size > 0
-      ? contextWindow.context_window_size
-      : null;
-
   return {
     modelId: parseModelId(input),
-    tokenUsage: parseTokenUsage(contextWindow.current_usage),
-    apiPercentages: parseApiPercentages(contextWindow),
-    contextWindowSize
+    tokenUsage: parseTokenUsage(contextWindow.current_usage)
   };
 }

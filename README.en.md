@@ -116,6 +116,21 @@ Pacing analysis calculates theoretical budget based on elapsed work days:
 - Yellow — usage speed 1.1x–1.3x theoretical
 - Red — usage speed > 1.3x theoretical
 
+### reset-format — Reset time format
+
+Controls how the reset time is displayed in the status line.
+
+| Value | Description | Example |
+|---|---|---|
+| `time` (default) | Show the reset time point | `reset 14:47` |
+| `countdown` | Show the remaining countdown | `reset 52m` / `reset 2d 5h` |
+
+```bash
+glm-quota-line config set reset-format countdown
+```
+
+The weekly quota also shows the reset info (time point or countdown) alongside its progress bar.
+
 ### --json — JSON output
 
 Output structured JSON format (terminal mode only, ignored in status line mode):
@@ -188,6 +203,21 @@ Auth source priority (highest to lowest):
 2. Environment variables `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL`
 3. `env` field in `~/.claude/settings.json`
 
+### reset — Restore defaults
+
+One-shot reset of user config. Install state is preserved (status line / hook are not removed).
+
+```bash
+glm-quota-line config reset            # reset all user config (interactive confirm)
+glm-quota-line config reset --models   # reset only custom model mappings (modelMap)
+glm-quota-line config reset --yes      # skip confirmation (scripts / CI)
+```
+
+- Default scope: all global config keys (theme/display/style/work-days/minimalist/raw-values/reset-format/auth-token/base-url), component layout (lines), and custom model mappings (modelMap).
+- `--models` limits the reset to modelMap only; other config is left untouched.
+- In non-interactive sessions (no TTY) `--yes` is required, otherwise it errors out — to avoid accidental deletion.
+- After reset the status line still works — model mappings fall back to the bundled table (`data/models.json`).
+
 ### configure — Interactive TUI setup
 
 Launch a terminal UI with live preview to adjust component toggles, styles, and global options.
@@ -211,6 +241,31 @@ Components:
 | `reset` | Reset time | — | ✓ |
 | `ctx` | Context window usage | ✓ (bar/text) | ✓ |
 
+### model — Context window management
+
+Manage the context window size mapping per model. The context window usage percentage is computed from this mapping.
+
+```bash
+glm-quota-line model list                    # list all models and their context window size
+glm-quota-line model get <model-id>          # show the size of a given model
+glm-quota-line model set <model-id> <size>   # set a model size (e.g. 300K or 300000)
+glm-quota-line model remove <model-id>       # remove a custom mapping (built-in model reverts to default)
+```
+
+Example `list` output:
+
+```
+glm-4.7        200K
+glm-5.1        200K
+glm-5.2        300K *
+```
+
+The `*` marker indicates a user-configured mapping.
+
+The model mapping is a two-layer system: the bundled `data/models.json` is the default base, and the `modelMap` in `~/.claude/glm-quota-line.json` is the user overlay (merged key-by-key at runtime). **When Zhipu releases a new model, you don't need to wait for an npm package update — just run `model set <new-model> <size>` to write the local overlay and it takes effect immediately.**
+
+To clear all custom model mappings and return to the bundled default table, run `glm-quota-line config reset --models --yes`.
+
 ## Recommended Combinations
 
 | Use case | Config |
@@ -219,9 +274,11 @@ Components:
 | Light terminal | `style=bar`, `theme=light` |
 | Minimal setup | `style=compact`, `theme=mono` |
 | Track usage | `style=bar`, `display=used` |
+| Countdown reset | `reset-format=countdown` |
 | Scripting | `--json` |
 | 6-day work week | `work-days=6` |
 | Minimal values | `minimalist=true` |
+| Custom model | `glm-quota-line model set glm-5.2 300K` |
 | Interactive setup | `glm-quota-line configure` |
 
 ## Command Reference
@@ -234,18 +291,45 @@ glm-quota-line version
 glm-quota-line check-update
 glm-quota-line configure
 glm-quota-line config show
-glm-quota-line config set <style|display|theme|auth-token|base-url|work-days|minimalist|raw-values> <value>
+glm-quota-line config set <style|display|theme|auth-token|base-url|work-days|minimalist|raw-values|reset-format> <value>
 glm-quota-line config unset <key>
+glm-quota-line config reset [--models] [--yes]
+glm-quota-line model list
+glm-quota-line model get <model-id>
+glm-quota-line model set <model-id> <size>
+glm-quota-line model remove <model-id>
 ```
 
 Run `glm-quota-line --help` for full descriptions.
+
+## For Agents / Automation
+
+If you are an AI agent (Claude Code / Cursor / Codex) or a script author, the following surface is guaranteed stable:
+
+```bash
+# Get the full machine-readable schema of every command in one call
+# (name / summary / sideEffect / args / examples)
+glm-quota-line commands --json
+
+# Focused help for a single command or command group
+glm-quota-line model --help
+glm-quota-line config set --help
+```
+
+Conventions:
+- **Exit codes**: `0` on success, `1` on error.
+- **Side-effect tagging**: every command is tagged `read` (safe for automation), `write` (persists config / model map), `mutating` (modifies Claude Code integration), or `interactive` (requires a TTY).
+- **Non-blocking**: no command blocks waiting for input (`config reset` needs `--yes` in non-interactive sessions; `configure` prints a hint instead of launching the TUI when there is no TTY).
+- **Read query**: `glm-quota-line --json` emits structured quota data (5h / week / MCP + reset times).
+
+Typical agent workflow: run `commands --json` to discover capabilities → invoke the command you need → parse stdout.
 
 ## Notes
 
 - Shows `TOKENS_LIMIT` and `MCP_LIMIT` / `TIME_LIMIT` quotas
 - Weekly quota progress bar shadow (▒) is a daily pacing baseline: the theoretical budget based on elapsed work days — the more the filled bar (█) extends past the shadow, the faster you're consuming
 - Context window usage is shown by default; toggle via `glm-quota-line configure`
-- Context window usage is calculated from raw tokens when model mapping is available, falls back to API-provided percentages
+- Context window usage is computed from raw tokens using the local model map; if the current model id is not in the map, the context segment is not shown (no guessing)
 - Each component can be individually toggled and styled via `glm-quota-line configure`
 - Missing auth returns `GLM | auth expired`; API failures return `GLM | quota unavailable`
 - `install` does not replace an unmanaged status line unless `--force` is used

@@ -1,4 +1,4 @@
-import { buildBar as buildBarBase } from "../status/format.js";
+import { buildBar as buildBarBase } from "../../shared/bar.js";
 
 export function formatWindowSize(size) {
   if (!Number.isFinite(size) || size <= 0) {

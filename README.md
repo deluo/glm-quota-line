@@ -250,7 +250,6 @@ glm-quota-line model list                    # 查看所有模型及其上下文
 glm-quota-line model get <model-id>          # 查看指定模型的大小
 glm-quota-line model set <model-id> <size>   # 设置模型大小（如 300K 或 300000）
 glm-quota-line model remove <model-id>       # 移除自定义映射（内置模型恢复默认值）
-echo '{"glm-5.2":300000}' | glm-quota-line model import  # 从 JSON 批量导入
 ```
 
 `list` 输出示例：
@@ -299,10 +298,30 @@ glm-quota-line model list
 glm-quota-line model get <model-id>
 glm-quota-line model set <model-id> <size>
 glm-quota-line model remove <model-id>
-echo '<json>' | glm-quota-line model import
 ```
 
 运行 `glm-quota-line --help` 查看完整说明。
+
+## 给 Agent / 自动化
+
+如果你是 AI agent(Claude Code / Cursor / Codex)或脚本作者,以下接口保证稳定:
+
+```bash
+# 一次调用拿到所有命令的 machine-readable schema(name / summary / sideEffect / args / examples)
+glm-quota-line commands --json
+
+# 查看单个命令或命令组的聚焦帮助
+glm-quota-line model --help
+glm-quota-line config set --help
+```
+
+约定:
+- **退出码**:成功 `0`,失败 `1`。
+- **副作用标注**:每个命令标为 `read`(只读,自动化安全)、`write`(改配置/模型映射)、`mutating`(改 Claude Code 集成)、`interactive`(需 TTY)。
+- **非阻塞**:所有命令都不会卡住等待输入(仅 `config reset` 在非交互环境需 `--yes`,`configure` 在非 TTY 时打印提示而非启动 TUI)。
+- **只读查询**:`glm-quota-line --json` 输出结构化配额数据(5h/week/MCP + 重置时间)。
+
+典型 agent 工作流:先 `commands --json` 了解能力 → 调用需要的命令 → 读取 stdout 解析结果。
 
 ## 说明
 

@@ -77,12 +77,32 @@ export function loadBundledModels(filePath = BUNDLED_MODELS_PATH) {
 
 let modelMap = { ...loadBundledModels() };
 
+// Case-insensitive key lookup. Status-bar stdin can report model ids in
+// varying case (e.g. `GLM-5.2` vs `glm-5.2`); matching case-insensitively
+// keeps the context segment stable across frames. Storage and display
+// preserve the original key casing.
+function findByKey(map, modelId) {
+  if (typeof modelId !== "string") {
+    return undefined;
+  }
+  if (Object.prototype.hasOwnProperty.call(map, modelId)) {
+    return { key: modelId, value: map[modelId] };
+  }
+  const lower = modelId.toLowerCase();
+  for (const [key, value] of Object.entries(map)) {
+    if (key.toLowerCase() === lower) {
+      return { key, value };
+    }
+  }
+  return undefined;
+}
+
 export function getModelSize(modelId) {
-  return modelMap[modelId];
+  return findByKey(modelMap, modelId)?.value;
 }
 
 export function hasModel(modelId) {
-  return modelId in modelMap;
+  return findByKey(modelMap, modelId) !== undefined;
 }
 
 export function setModelSize(modelId, size) {
@@ -116,8 +136,9 @@ export function removeModel(modelId) {
   if (typeof modelId !== "string" || !modelId) {
     return false;
   }
-  if (modelId in modelMap) {
-    delete modelMap[modelId];
+  const found = findByKey(modelMap, modelId);
+  if (found) {
+    delete modelMap[found.key];
     return true;
   }
   return false;

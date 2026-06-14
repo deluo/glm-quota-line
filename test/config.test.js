@@ -13,7 +13,8 @@ import {
   normalizeConfig,
   migrateOldConfig,
   DEFAULT_GLOBAL_CONFIG,
-  DEFAULT_LINES
+  DEFAULT_LINES,
+  isValidResetFormat
 } from '../src/shared/constants.js';
 
 // Component Types
@@ -213,4 +214,40 @@ test('migrateOldConfig ignores workDays (new field with no old equivalent)', () 
   assert.strictEqual(result.global.rawValues, false);
   assert.strictEqual('workDays' in result.global, false);
   assert.strictEqual(result.lines[0].components[4].enabled, true);
+});
+
+// Reset Format
+test('isValidResetFormat accepts valid values', () => {
+  assert.strictEqual(isValidResetFormat("time"), true);
+  assert.strictEqual(isValidResetFormat("countdown"), true);
+  assert.strictEqual(isValidResetFormat("invalid"), false);
+  assert.strictEqual(isValidResetFormat(""), false);
+  assert.strictEqual(isValidResetFormat(null), false);
+});
+
+test('DEFAULT_GLOBAL_CONFIG includes resetFormat time', () => {
+  assert.strictEqual(DEFAULT_GLOBAL_CONFIG.resetFormat, "time");
+});
+
+test('normalizeConfig preserves valid resetFormat', () => {
+  const config = {
+    global: { resetFormat: "countdown" },
+    lines: [{ components: [{ type: COMPONENT_TYPES.PRIMARY, style: "bar" }] }]
+  };
+  const result = normalizeConfig(config);
+  assert.strictEqual(result.global.resetFormat, "countdown");
+});
+
+test('normalizeConfig falls back to default for invalid resetFormat', () => {
+  const config = {
+    global: { resetFormat: "invalid" },
+    lines: [{ components: [{ type: COMPONENT_TYPES.PRIMARY, style: "bar" }] }]
+  };
+  const result = normalizeConfig(config);
+  assert.strictEqual(result.global.resetFormat, "time");
+});
+
+test('normalizeConfig defaults resetFormat to time', () => {
+  const result = normalizeConfig({});
+  assert.strictEqual(result.global.resetFormat, "time");
 });
