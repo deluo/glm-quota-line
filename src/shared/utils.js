@@ -26,11 +26,6 @@ export function clampPercent(value) {
   return Math.min(100, Math.max(0, n));
 }
 
-export function clampRoundPercent(value) {
-  const percent = clampPercent(value);
-  return percent !== null ? Math.round(percent) : null;
-}
-
 export function asFiniteNumber(value) {
   return Number.isFinite(value) ? value : null;
 }

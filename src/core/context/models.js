@@ -101,10 +101,6 @@ export function getModelSize(modelId) {
   return findByKey(modelMap, modelId)?.value;
 }
 
-export function hasModel(modelId) {
-  return findByKey(modelMap, modelId) !== undefined;
-}
-
 export function setModelSize(modelId, size) {
   if (typeof modelId !== "string" || !modelId) {
     return;
@@ -126,10 +122,6 @@ export function mergeModelMap(newMap) {
       setModelSize(modelId, size);
     }
   }
-}
-
-export function getAllModels() {
-  return { ...modelMap };
 }
 
 export function removeModel(modelId) {

@@ -206,10 +206,6 @@ export const COMMAND_GROUPS = {
   config: ["config show", "config set", "config unset", "config reset"]
 };
 
-export function getCommand(key) {
-  return COMMAND_REGISTRY[key] || null;
-}
-
 export function allCommands() {
   return Object.values(COMMAND_REGISTRY);
 }

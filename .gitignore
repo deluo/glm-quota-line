@@ -2,3 +2,5 @@ node_modules/
 coverage/
 *.log
 *.tgz
+*.backup
+docs/

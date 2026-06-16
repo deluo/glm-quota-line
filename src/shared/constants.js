@@ -58,6 +58,10 @@ export const REFRESH_BANDS = [
 export const LOW_QUOTA_THRESHOLD = 30;
 export const RATE_LIMIT_RETRY_TTL_MS = 180_000;
 export const UNAVAILABLE_RETRY_TTL_MS = 120_000;
+// A cached *success* value is only trusted to bridge transient failures for
+// this long. Past it, a sustained `unavailable` must surface instead of
+// freezing the status bar at a pre-exhaustion percentage. 10 min.
+export const STALE_SUCCESS_MAX_AGE_MS = 600_000;
 export const DEFAULT_DISPLAY_MODE = "left";
 export const DEFAULT_STYLE = "bar";
 export const DEFAULT_THEME = "dark";
@@ -209,6 +213,6 @@ export function normalizeConfig(config) {
   return { global, lines };
 }
 
-// Re-exported for backward compatibility
+// Re-exported for test imports
 export { migrateOldConfig } from "./migration.js";
 

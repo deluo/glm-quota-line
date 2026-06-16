@@ -201,6 +201,77 @@ test("parser extracts MCP data from TIME_LIMIT type entry", () => {
   assert.equal(result.mcp.nextResetTime, 1777518607998);
 });
 
+// ── Parser: exhausted TOKENS_LIMIT (0% remaining) ───────────────
+
+function tokenLimitResponse(limit) {
+  return {
+    kind: "response",
+    status: 200,
+    json: {
+      code: 200,
+      msg: "操作成功",
+      success: true,
+      data: {
+        level: "lite",
+        limits: [limit]
+      }
+    },
+    text: "{}"
+  };
+}
+
+test("parser shows 0% when exhausted TOKENS_LIMIT reports remaining:0 and usage evidence", () => {
+  // remaining is exhausted and a separate usage field confirms the quota existed.
+  // currentValue happens to be 0 (e.g. API zeroes both at exhaustion); without a
+  // usable `percentage` the `total > 0` guard used to drop this as `unavailable`.
+  const result = parseQuotaResponse(
+    tokenLimitResponse({
+      type: "TOKENS_LIMIT",
+      number: 5,
+      remaining: 0,
+      currentValue: 0,
+      usage: 100,
+      nextResetTime: 1776352324538
+    })
+  );
+  assert.equal(result.kind, "success");
+  assert.equal(result.leftPercent, 0);
+  assert.equal(result.usedPercent, 100);
+});
+
+test("parser shows 0% when exhausted TOKENS_LIMIT reports remaining:0 and percentage:100", () => {
+  // All counters zeroed, but the explicit percentage:100 (= used 100%) is the
+  // authoritative exhaustion signal.
+  const result = parseQuotaResponse(
+    tokenLimitResponse({
+      type: "TOKENS_LIMIT",
+      number: 5,
+      remaining: 0,
+      currentValue: 0,
+      usage: 0,
+      percentage: 100,
+      nextResetTime: 1776352324538
+    })
+  );
+  assert.equal(result.kind, "success");
+  assert.equal(result.leftPercent, 0);
+  assert.equal(result.usedPercent, 100);
+});
+
+test("parser treats fully-unknown zeroed TOKENS_LIMIT as unavailable (no false 0%)", () => {
+  // No usage evidence and no percentage: cannot tell exhaustion from malformed data.
+  const result = parseQuotaResponse(
+    tokenLimitResponse({
+      type: "TOKENS_LIMIT",
+      number: 5,
+      remaining: 0,
+      currentValue: 0,
+      nextResetTime: 1776352324538
+    })
+  );
+  assert.equal(result.kind, "unavailable");
+});
+
 // ── formatQueryHuman ────────────────────────────────────────────
 
 test("formatQueryHuman shows left mode with full date and MCP", () => {

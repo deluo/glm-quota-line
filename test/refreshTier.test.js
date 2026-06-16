@@ -8,6 +8,7 @@ import { createQuotaConfig, makeJsonResponse, withTempDir } from "./helpers.js";
 import {
   RATE_LIMIT_RETRY_TTL_MS,
   REFRESH_BANDS,
+  STALE_SUCCESS_MAX_AGE_MS,
   UNAVAILABLE_RETRY_TTL_MS
 } from "../src/shared/constants.js";
 
@@ -538,5 +539,65 @@ test("unavailable response keeps stale quota and retries after 2 minutes", async
       }
     });
     assert.equal(calls, 1);
+  });
+});
+
+// ── Stale success fallback must expire (exhausted quota) ────────
+
+function malformedResponse() {
+  return {
+    status: 200,
+    async text() {
+      return "not-json";
+    }
+  };
+}
+
+test("unavailable within stale window falls back to cached success value", async () => {
+  await withTempDir(async (dir) => {
+    const cacheFilePath = path.join(dir, "cache.json");
+    await seedCache(cacheFilePath, { leftPercent: 50 });
+
+    // Fail shortly after the success snapshot — still inside the stale window.
+    const result = await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: 1000 + getTtl(50),
+      fetchImpl: async () => malformedResponse()
+    });
+
+    assert.equal(result.kind, "success");
+    assert.equal(result.leftPercent, 50);
+  });
+});
+
+test("unavailable past the stale window no longer masks the real state", async () => {
+  await withTempDir(async (dir) => {
+    const cacheFilePath = path.join(dir, "cache.json");
+    await seedCache(cacheFilePath, { leftPercent: 50 });
+
+    // The success snapshot is now too old to trust — surface the real state
+    // instead of freezing the bar at the pre-exhaustion value.
+    const result = await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: 1000 + STALE_SUCCESS_MAX_AGE_MS,
+      fetchImpl: async () => malformedResponse()
+    });
+
+    assert.equal(result.kind, "unavailable");
+  });
+});
+
+test("sustained 429 (exhaustion) past the stale window no longer freezes the bar", async () => {
+  await withTempDir(async (dir) => {
+    const cacheFilePath = path.join(dir, "cache.json");
+    await seedCache(cacheFilePath, { leftPercent: 50 });
+
+    // GLM signals quota exhaustion as HTTP 429. Sustained 429 past the stale
+    // window must surface the real state, not freeze at the old percentage.
+    const result = await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
+      now: 1000 + STALE_SUCCESS_MAX_AGE_MS,
+      fetchImpl: async () =>
+        makeJsonResponse({ code: 429, msg: "too many requests", success: false }, 429)
+    });
+
+    assert.equal(result.kind, "rate_limited");
   });
 });

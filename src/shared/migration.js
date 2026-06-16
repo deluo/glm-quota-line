@@ -44,10 +44,3 @@ export function needsMigration(config) {
   // Legacy ctxEnabled without lines config requires migration
   return typeof config.ctxEnabled === "boolean" && !config.lines;
 }
-
-export function applyMigration(config) {
-  if (needsMigration(config)) {
-    return migrateOldConfig(config);
-  }
-  return config;
-}

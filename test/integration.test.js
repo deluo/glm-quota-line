@@ -214,8 +214,10 @@ test("falls back to stale cache on unavailable responses", async () => {
       )
     );
 
+    // Transient failure shortly after the success snapshot — still inside the
+    // stale-success window, so the cached value bridges the blip.
     const result = await resolveQuotaStatus(createQuotaConfig(cacheFilePath), {
-      now: 1774936505000,
+      now: 1774930060000,
       fetchImpl: async () => ({
         status: 200,
         async text() {
