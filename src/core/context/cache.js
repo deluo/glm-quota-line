@@ -61,6 +61,10 @@ export async function writeCtxCache(data, filePath = CACHE_FILE) {
   if (!isValidCached(data)) {
     return;
   }
+  // Fill savedAt here (not at call sites): getContextData's return shape has no
+  // savedAt, so callers would otherwise write `undefined` and the field would
+  // vanish from the JSON. Centralizing it mirrors quota cache's writeSuccessCache
+  // and keeps the timestamp reliable for future staleness checks.
   const payload = {
     modelId: data.modelId,
     usedPercent: data.usedPercent,
@@ -68,7 +72,7 @@ export async function writeCtxCache(data, filePath = CACHE_FILE) {
     windowSize: data.windowSize,
     severity: VALID_SEVERITIES.has(data.severity) ? data.severity : "neutral",
     sessionId: data.sessionId || "",
-    savedAt: data.savedAt
+    savedAt: Number.isFinite(data.savedAt) ? data.savedAt : Date.now()
   };
   try {
     await fs.mkdir(path.dirname(filePath), { recursive: true });

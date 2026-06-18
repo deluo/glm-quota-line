@@ -649,3 +649,27 @@ test("config subcommand help lists reset", async () => {
   assert.match(output, /Supported config subcommands: show, set, unset, reset/);
   process.exitCode = 0;
 });
+
+test("config set with unknown key lists every supported key including reset-format", async () => {
+  let output = "";
+  await handleCommand(
+    { positionals: ["config", "set", "bogus", "x"] },
+    { write(chunk) { output += chunk; } }
+  );
+  // The supported-keys message is derived from CONFIG_KEYS, so it must cover
+  // reset-format (previously dropped by a hardcoded message).
+  for (const key of ["style", "display", "theme", "auth-token", "base-url", "work-days", "minimalist", "raw-values", "reset-format"]) {
+    assert.match(output, new RegExp(`\\b${key}\\b`), `expected supported-keys message to include "${key}"`);
+  }
+  process.exitCode = 0;
+});
+
+test("config unset with unknown key lists every supported key including reset-format", async () => {
+  let output = "";
+  await handleCommand(
+    { positionals: ["config", "unset", "bogus"] },
+    { write(chunk) { output += chunk; } }
+  );
+  assert.match(output, /reset-format/);
+  process.exitCode = 0;
+});

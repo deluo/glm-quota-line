@@ -91,8 +91,10 @@ const CONFIG_KEYS = {
   }
 };
 
+// Derived from CONFIG_KEYS so the supported list can never drift from the
+// actually-handled keys (a previous hardcoded message omitted reset-format).
 const SUPPORTED_CONFIG_KEYS_MESSAGE =
-  "Supported config keys: style, display, theme, auth-token, base-url, work-days, minimalist, raw-values\n";
+  `Supported config keys: ${Object.keys(CONFIG_KEYS).join(", ")}\n`;
 
 export async function handleCommand(args, output = process.stdout, dependencies = {}) {
   const getVersion = dependencies.getVersion || getPackageVersion;

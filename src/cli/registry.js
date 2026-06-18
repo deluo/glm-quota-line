@@ -5,6 +5,12 @@
 // When you add a branch to handleCommand in commands.js (or a subcommand in
 // modelCommand.js / configCommand.js), add a matching entry here. The
 // integration test asserts every registry entry maps to a real dispatch branch.
+//
+// Note: `session-start-refresh` is intentionally NOT registered here. It is an
+// internal hook command wired up by install.js into Claude Code's SessionStart
+// hooks; it is dispatchable (see commands.js) but deliberately omitted from the
+// public command surface (commands --json / --help / README) so users don't
+// invoke it directly.
 
 // sideEffect: read | write | interactive | mutating
 //   read        — no persisted state change, safe for automation

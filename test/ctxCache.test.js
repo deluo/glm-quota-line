@@ -29,6 +29,31 @@ test("writeCtxCache then readCtxCache round-trips the value", async () => {
   });
 });
 
+test("writeCtxCache fills savedAt when the caller omits it", async () => {
+  await withTempDir(async (dir) => {
+    const file = path.join(dir, "ctx-cache.json");
+    const before = Date.now();
+    // VALID has no savedAt — mimics getContextData's return shape, which
+    // previously caused savedAt to be dropped entirely from the JSON.
+    await writeCtxCache({ ...VALID }, file);
+    const after = Date.now();
+
+    const read = await readCtxCache(file);
+    assert.ok(Number.isFinite(read.savedAt), "savedAt must be a finite number");
+    assert.ok(read.savedAt >= before && read.savedAt <= after, "savedAt should be ~now");
+  });
+});
+
+test("writeCtxCache honors an explicit savedAt passed by the caller", async () => {
+  await withTempDir(async (dir) => {
+    const file = path.join(dir, "ctx-cache.json");
+    await writeCtxCache({ ...VALID, savedAt: 12345 }, file);
+
+    const read = await readCtxCache(file);
+    assert.equal(read.savedAt, 12345);
+  });
+});
+
 test("readCtxCache returns null when the file is missing", async () => {
   await withTempDir(async (dir) => {
     const read = await readCtxCache(path.join(dir, "missing.json"));
