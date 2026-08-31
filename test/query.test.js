@@ -335,3 +335,52 @@ test("formatQueryHuman returns error for null result", () => {
   const output = formatQueryHuman(null, "left");
   assert.equal(output, "GLM | quota unavailable\n");
 });
+
+// ── Parser: credit-based plans (CREDIT_LIMIT, no success flag) ──
+
+test("parser handles credit-plan response with CREDIT_LIMIT limits and no success flag", () => {
+  const response = {
+    kind: "response",
+    status: 200,
+    json: {
+      code: 200,
+      msg: "Operation successful",
+      data: {
+        limits: [
+          {
+            type: "CREDIT_LIMIT",
+            unit: 3,
+            number: 5,
+            usage: 2000,
+            currentValue: 1400,
+            remaining: 600,
+            percentage: 70,
+            nextResetTime: 1788190030671
+          },
+          {
+            type: "CREDIT_LIMIT",
+            unit: 6,
+            number: 1,
+            usage: 10000,
+            currentValue: 7500,
+            remaining: 2500,
+            percentage: 75,
+            nextResetTime: 1788344675994
+          }
+        ]
+      }
+    }
+  };
+
+  const result = parseQuotaResponse(response);
+
+  assert.equal(result.kind, "success");
+  assert.equal(result.level, "");
+  assert.ok(Array.isArray(result.quotas));
+  assert.equal(result.quotas.length, 2);
+  assert.equal(result.quotas[0].key, "token_5h");
+  assert.equal(result.quotas[0].leftPercent, 30);
+  assert.equal(result.quotas[0].usedPercent, 70);
+  assert.equal(result.quotas[1].key, "token_week");
+  assert.equal(result.quotas[1].leftPercent, 25);
+});

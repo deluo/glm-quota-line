@@ -107,7 +107,7 @@ function pickSecondaryTokenLimit(tokenLimits, primaryLimit) {
 
 function pickPrimaryAndSecondaryTokenLimits(limits) {
   const tokenLimits = limits
-    .filter((limit) => limit?.type === "TOKENS_LIMIT")
+    .filter((limit) => limit?.type === "TOKENS_LIMIT" || limit?.type === "CREDIT_LIMIT")
     .map((limit, index) => ({ ...limit, _index: index }));
 
   if (tokenLimits.length === 0) {
@@ -186,7 +186,8 @@ export function parseQuotaResponse(response) {
     return { kind: "unavailable" };
   }
 
-  if (payload.success !== true) {
+  // The current quota endpoint returns code:200 without a success flag
+  if (payload.success !== true && payload.code !== 200) {
     if (payload.code === 1001 || payload.code === 401 || isAuthFailureMessage(payload.msg)) {
       return { kind: "auth_error" };
     }
