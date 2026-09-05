@@ -106,8 +106,9 @@ function pickSecondaryTokenLimit(tokenLimits, primaryLimit) {
 }
 
 function pickPrimaryAndSecondaryTokenLimits(limits) {
+  // GLM Lite 套餐(积分制)返回 CREDIT_LIMIT,数据结构与 TOKENS_LIMIT 一致
   const tokenLimits = limits
-    .filter((limit) => limit?.type === "TOKENS_LIMIT")
+    .filter((limit) => limit?.type === "TOKENS_LIMIT" || limit?.type === "CREDIT_LIMIT")
     .map((limit, index) => ({ ...limit, _index: index }));
 
   if (tokenLimits.length === 0) {
