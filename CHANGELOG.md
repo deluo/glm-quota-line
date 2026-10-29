@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.1
+
+- Fixed "quota unavailable" on api.z.ai / open.bigmodel.cn: the quota endpoint now returns `{"code":200,...}` without a top-level `success` flag, which made every response parse as unavailable (#6)
+- Added support for credit-based Coding Plans: their 5h/weekly windows are reported as `CREDIT_LIMIT` entries (`usage`/`currentValue`/`remaining`) instead of `TOKENS_LIMIT`, which previously produced no quotas (#6)
+
 ## 1.3.0
 
 - Added `commands` subcommand: list every command with a machine-readable schema via `--json` (name / summary / sideEffect / args / examples), for AI agents and scripting
